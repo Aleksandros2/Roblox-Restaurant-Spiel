@@ -1,0 +1,12 @@
+# Rojo build outputs
+/*.rbxlx
+/*.rbxl
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# Generated Rojo artifacts and local logs
+/sourcemap.json
+/rojo-serve.out.log
+/rojo-serve.err.log
