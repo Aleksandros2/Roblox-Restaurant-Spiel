@@ -23,6 +23,12 @@ local CUSTOMER_COLORS = {
 	Color3.fromRGB(142, 255, 174),
 }
 
+local RECIPE_ACCENTS = {
+	SpicyRamen = Color3.fromRGB(255, 133, 96),
+	BubbleTea = Color3.fromRGB(106, 209, 255),
+	KoreanCornDog = Color3.fromRGB(255, 210, 95),
+}
+
 local function getFoodTruck()
 	return workspace:FindFirstChild("FoodTruck")
 end
@@ -56,8 +62,10 @@ local function makeBillboard(parent, text, backgroundColor)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "OrderBillboard"
 	billboard.AlwaysOnTop = true
-	billboard.Size = UDim2.fromOffset(220, 70)
-	billboard.StudsOffset = Vector3.new(0, 3.25, 0)
+	billboard.LightInfluence = 0
+	billboard.MaxDistance = 140
+	billboard.Size = UDim2.fromOffset(240, 78)
+	billboard.StudsOffset = Vector3.new(0, 3.55, 0)
 	billboard.Parent = parent
 
 	local label = Instance.new("TextLabel")
@@ -76,6 +84,23 @@ local function makeBillboard(parent, text, backgroundColor)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = label
+
+	local stroke = Instance.new("UIStroke")
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Thickness = 1
+	stroke.Transparency = 0.45
+	stroke.Parent = label
+end
+
+local function addPointLight(parent, color, range, brightness)
+	local pointLight = Instance.new("PointLight")
+	pointLight.Brightness = brightness
+	pointLight.Color = color
+	pointLight.Range = range
+	pointLight.Shadows = false
+	pointLight.Parent = parent
+	return pointLight
 end
 
 function CustomerService:_notify(player, message, notificationType)
@@ -129,6 +154,9 @@ function CustomerService:_createCustomerModel(customer)
 		return nil
 	end
 
+	local accentColor = RECIPE_ACCENTS[customer.orderRecipeId] or CUSTOMER_COLORS[self._random:NextInteger(1, #CUSTOMER_COLORS)]
+	local bodyColor = CUSTOMER_COLORS[self._random:NextInteger(1, #CUSTOMER_COLORS)]
+
 	local model = Instance.new("Model")
 	model.Name = customer.isInfluencer and ("Influencer_" .. customer.customerId) or ("Customer_" .. customer.customerId)
 	model:SetAttribute("CustomerId", customer.customerId)
@@ -136,16 +164,39 @@ function CustomerService:_createCustomerModel(customer)
 	model:SetAttribute("IsInfluencer", customer.isInfluencer)
 	model.Parent = activeFolder
 
+	local basePad = Instance.new("Part")
+	basePad.Name = "QueueGlow"
+	basePad.Anchored = true
+	basePad.CanCollide = false
+	basePad.Shape = Enum.PartType.Cylinder
+	basePad.Size = Vector3.new(0.22, 3.4, 3.4)
+	basePad.Color = accentColor
+	basePad.Material = Enum.Material.Neon
+	basePad.Transparency = 0.18
+	basePad.CFrame = CFrame.new(spawnPoint.Position + Vector3.new(0, 0.14, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	basePad.Parent = model
+	addPointLight(basePad, accentColor, 10, 1.2)
+
 	local body = Instance.new("Part")
 	body.Name = "Body"
 	body.Anchored = true
 	body.CanCollide = false
-	body.Size = Vector3.new(2, 3, 1)
-	body.Color = CUSTOMER_COLORS[self._random:NextInteger(1, #CUSTOMER_COLORS)]
+	body.Size = Vector3.new(2.1, 3, 1.1)
+	body.Color = bodyColor
 	body.Material = Enum.Material.SmoothPlastic
 	body.CFrame = spawnPoint.CFrame + Vector3.new(0, 1.6, 0)
 	body.Parent = model
 	model.PrimaryPart = body
+
+	local outfit = Instance.new("Part")
+	outfit.Name = "Outfit"
+	outfit.Anchored = true
+	outfit.CanCollide = false
+	outfit.Size = Vector3.new(2.18, 1.65, 1.16)
+	outfit.Color = accentColor
+	outfit.Material = Enum.Material.SmoothPlastic
+	outfit.CFrame = body.CFrame + Vector3.new(0, -0.25, -0.02)
+	outfit.Parent = model
 
 	local head = Instance.new("Part")
 	head.Name = "Head"
@@ -158,11 +209,65 @@ function CustomerService:_createCustomerModel(customer)
 	head.CFrame = body.CFrame + Vector3.new(0, 2.2, 0)
 	head.Parent = model
 
+	local leftArm = Instance.new("Part")
+	leftArm.Name = "LeftArm"
+	leftArm.Anchored = true
+	leftArm.CanCollide = false
+	leftArm.Size = Vector3.new(0.55, 2.2, 0.55)
+	leftArm.Color = bodyColor
+	leftArm.Material = Enum.Material.SmoothPlastic
+	leftArm.CFrame = body.CFrame + Vector3.new(-1.25, 0.15, 0)
+	leftArm.Parent = model
+
+	local rightArm = Instance.new("Part")
+	rightArm.Name = "RightArm"
+	rightArm.Anchored = true
+	rightArm.CanCollide = false
+	rightArm.Size = Vector3.new(0.55, 2.2, 0.55)
+	rightArm.Color = bodyColor
+	rightArm.Material = Enum.Material.SmoothPlastic
+	rightArm.CFrame = body.CFrame + Vector3.new(1.25, 0.15, 0)
+	rightArm.Parent = model
+
+	local cap = Instance.new("Part")
+	cap.Name = "Cap"
+	cap.Anchored = true
+	cap.CanCollide = false
+	cap.Size = Vector3.new(1.7, 0.35, 1.7)
+	cap.Color = accentColor
+	cap.Material = Enum.Material.SmoothPlastic
+	cap.CFrame = head.CFrame + Vector3.new(0, 0.82, 0)
+	cap.Parent = model
+
+	local visor = Instance.new("Part")
+	visor.Name = "Visor"
+	visor.Anchored = true
+	visor.CanCollide = false
+	visor.Size = Vector3.new(1.1, 0.14, 0.55)
+	visor.Color = accentColor
+	visor.Material = Enum.Material.SmoothPlastic
+	visor.CFrame = cap.CFrame + Vector3.new(0, -0.08, -0.65)
+	visor.Parent = model
+
+	if customer.isInfluencer then
+		local halo = Instance.new("Part")
+		halo.Name = "InfluencerHalo"
+		halo.Anchored = true
+		halo.CanCollide = false
+		halo.Shape = Enum.PartType.Cylinder
+		halo.Size = Vector3.new(0.18, 2.5, 2.5)
+		halo.Color = Color3.fromRGB(255, 214, 92)
+		halo.Material = Enum.Material.Neon
+		halo.CFrame = CFrame.new(head.Position + Vector3.new(0, 1.45, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		halo.Parent = model
+		addPointLight(halo, Color3.fromRGB(255, 214, 92), 12, 1.5)
+	end
+
 	local labelText = RecipeDefinitions.GetRecipeDisplayName(customer.orderRecipeId)
 	if customer.isInfluencer then
 		labelText = "Influencer\n" .. labelText
 	end
-	makeBillboard(head, labelText, customer.isInfluencer and Color3.fromRGB(255, 209, 64) or Color3.fromRGB(255, 255, 255))
+	makeBillboard(head, labelText, customer.isInfluencer and Color3.fromRGB(255, 214, 95) or Color3.fromRGB(255, 248, 228))
 
 	return model
 end

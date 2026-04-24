@@ -6,15 +6,149 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local GameConstants = require(Shared:WaitForChild("GameConstants"))
 
-local function ensureFolder(parent, name)
-	local folder = parent:FindFirstChild(name)
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = name
-		folder.Parent = parent
+local function ensureChild(parent, className, name)
+	local child = parent:FindFirstChild(name)
+	if child and not child:IsA(className) then
+		child:Destroy()
+		child = nil
 	end
 
-	return folder
+	if not child then
+		child = Instance.new(className)
+		child.Name = name
+		child.Parent = parent
+	end
+
+	return child
+end
+
+local function applyProperties(instance, properties)
+	for property, value in pairs(properties or {}) do
+		instance[property] = value
+	end
+end
+
+local function ensureFolder(parent, name)
+	return ensureChild(parent, "Folder", name)
+end
+
+local function ensureModel(parent, name)
+	return ensureChild(parent, "Model", name)
+end
+
+local function ensurePart(parent, name, properties)
+	local part = ensureChild(parent, "Part", name)
+	applyProperties(part, properties)
+	return part
+end
+
+local function ensurePrompt(part, actionText, objectText)
+	local prompt = part:FindFirstChildOfClass("ProximityPrompt")
+	if not prompt then
+		prompt = Instance.new("ProximityPrompt")
+		prompt.Parent = part
+	end
+
+	prompt.ActionText = actionText
+	prompt.ObjectText = objectText
+	prompt.HoldDuration = 0.25
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	return prompt
+end
+
+local function ensureBillboard(part, text, backgroundColor, textColor)
+	local billboard = ensureChild(part, "BillboardGui", "StationLabel")
+	applyProperties(billboard, {
+		AlwaysOnTop = true,
+		LightInfluence = 0,
+		MaxDistance = 120,
+		Size = UDim2.fromOffset(230, 62),
+		StudsOffset = Vector3.new(0, 3.2, 0),
+	})
+
+	local label = ensureChild(billboard, "TextLabel", "Label")
+	applyProperties(label, {
+		BackgroundColor3 = backgroundColor,
+		BackgroundTransparency = 0.08,
+		BorderSizePixel = 0,
+		Font = Enum.Font.GothamBold,
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		TextColor3 = textColor or Color3.fromRGB(24, 22, 26),
+		TextScaled = true,
+		TextWrapped = true,
+	})
+
+	local corner = ensureChild(label, "UICorner", "Corner")
+	corner.CornerRadius = UDim.new(0, 10)
+
+	local stroke = ensureChild(label, "UIStroke", "Stroke")
+	applyProperties(stroke, {
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = Color3.fromRGB(255, 255, 255),
+		Thickness = 1,
+		Transparency = 0.5,
+	})
+
+	return billboard
+end
+
+local function ensureSurfaceSign(part, name, face, text, backgroundColor, textColor, textSize)
+	local surface = ensureChild(part, "SurfaceGui", name)
+	applyProperties(surface, {
+		AlwaysOnTop = true,
+		CanvasSize = Vector2.new(720, 240),
+		Face = face,
+		LightInfluence = 0,
+		PixelsPerStud = 48,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+	})
+
+	local label = ensureChild(surface, "TextLabel", "Label")
+	applyProperties(label, {
+		BackgroundColor3 = backgroundColor,
+		BackgroundTransparency = 0.04,
+		BorderSizePixel = 0,
+		Font = Enum.Font.GothamBold,
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		TextColor3 = textColor,
+		TextScaled = false,
+		TextSize = textSize,
+		TextWrapped = true,
+	})
+
+	local corner = ensureChild(label, "UICorner", "Corner")
+	corner.CornerRadius = UDim.new(0, 12)
+
+	local stroke = ensureChild(label, "UIStroke", "Stroke")
+	applyProperties(stroke, {
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = Color3.fromRGB(255, 255, 255),
+		Thickness = 2,
+		Transparency = 0.35,
+	})
+
+	return surface
+end
+
+local function ensurePointLight(parent, name, color, range, brightness)
+	local light = ensureChild(parent, "PointLight", name)
+	applyProperties(light, {
+		Brightness = brightness,
+		Color = color,
+		Enabled = true,
+		Range = range,
+		Shadows = false,
+	})
+	return light
+end
+
+local function ensureLightingEffect(className, name, properties)
+	local effect = ensureChild(Lighting, className, name)
+	applyProperties(effect, properties)
+	return effect
 end
 
 local function ensureRemoteEvents()
@@ -41,135 +175,438 @@ local function ensureRemoteEvents()
 	return remotes
 end
 
-local function ensurePart(parent, name, size, cframe, color, material)
-	local part = parent:FindFirstChild(name)
-	if not part then
-		part = Instance.new("Part")
-		part.Name = name
-		part.Parent = parent
-	end
-
-	part.Anchored = true
-	part.Size = size
-	part.CFrame = cframe
-	part.Color = color
-	part.Material = material or Enum.Material.SmoothPlastic
-	return part
+local function ensureDecorSphere(parent, name, position, color, size, range, brightness)
+	local bulb = ensurePart(parent, name, {
+		Anchored = true,
+		CanCollide = false,
+		Color = color,
+		Material = Enum.Material.Neon,
+		Shape = Enum.PartType.Ball,
+		Size = size or Vector3.new(0.85, 0.85, 0.85),
+		CFrame = CFrame.new(position),
+	})
+	ensurePointLight(bulb, "Glow", color, range or 14, brightness or 2)
+	return bulb
 end
 
-local function ensurePrompt(part, actionText, objectText)
-	local prompt = part:FindFirstChildOfClass("ProximityPrompt")
-	if not prompt then
-		prompt = Instance.new("ProximityPrompt")
-		prompt.Parent = part
-	end
+local function ensureStation(parent, name, stationType, position, accentColor, actionText, labelText)
+	local base = ensurePart(parent, name .. "Base", {
+		Anchored = true,
+		Color = Color3.fromRGB(69, 58, 64),
+		Material = Enum.Material.Concrete,
+		Size = Vector3.new(5.8, 1.1, 5.8),
+		CFrame = CFrame.new(position.X, 0.55, position.Z),
+	})
+	base.TopSurface = Enum.SurfaceType.Smooth
+	base.BottomSurface = Enum.SurfaceType.Smooth
 
-	prompt.ActionText = actionText
-	prompt.ObjectText = objectText
-	prompt.HoldDuration = 0.25
-	prompt.MaxActivationDistance = 12
-	prompt.RequiresLineOfSight = false
-	return prompt
-end
-
-local function ensureBillboard(part, text, color)
-	local billboard = part:FindFirstChild("StationLabel")
-	if not billboard then
-		billboard = Instance.new("BillboardGui")
-		billboard.Name = "StationLabel"
-		billboard.AlwaysOnTop = true
-		billboard.Size = UDim2.fromOffset(220, 56)
-		billboard.StudsOffset = Vector3.new(0, 2.8, 0)
-		billboard.Parent = part
-
-		local label = Instance.new("TextLabel")
-		label.Name = "Label"
-		label.BackgroundTransparency = 0.08
-		label.BorderSizePixel = 0
-		label.Size = UDim2.fromScale(1, 1)
-		label.Font = Enum.Font.GothamBold
-		label.TextScaled = true
-		label.TextWrapped = true
-		label.Parent = billboard
-
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 8)
-		corner.Parent = label
-	end
-
-	local label = billboard:FindFirstChild("Label")
-	if label then
-		label.Text = text
-		label.TextColor3 = Color3.fromRGB(27, 25, 25)
-		label.BackgroundColor3 = color
-	end
-end
-
-local function ensureStation(parent, name, stationType, position, color, actionText)
-	local station = ensurePart(parent, name, Vector3.new(4, 2, 4), CFrame.new(position), color, Enum.Material.SmoothPlastic)
+	local station = ensurePart(parent, name, {
+		Anchored = true,
+		Color = accentColor,
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(4.4, 2.4, 4.4),
+		CFrame = CFrame.new(position),
+	})
 	station:SetAttribute("StationType", stationType)
-	ensurePrompt(station, actionText, name)
-	ensureBillboard(station, name .. "\n" .. stationType, Color3.fromRGB(255, 255, 255))
-	return station
+	station.TopSurface = Enum.SurfaceType.Smooth
+	station.BottomSurface = Enum.SurfaceType.Smooth
+
+	local trim = ensurePart(parent, name .. "Trim", {
+		Anchored = true,
+		CanCollide = false,
+		Color = Color3.fromRGB(255, 248, 228),
+		Material = Enum.Material.Neon,
+		Size = Vector3.new(4.8, 0.2, 4.8),
+		CFrame = station.CFrame + Vector3.new(0, 1.31, 0),
+	})
+
+	local canopy = ensurePart(parent, name .. "Canopy", {
+		Anchored = true,
+		CanCollide = false,
+		Color = Color3.fromRGB(255, 246, 226),
+		Material = Enum.Material.Fabric,
+		Size = Vector3.new(5.4, 0.24, 5.4),
+		CFrame = station.CFrame + Vector3.new(0, 3.15, 0),
+	})
+
+	ensurePrompt(station, actionText, labelText)
+	ensureBillboard(station, labelText .. "\n" .. stationType, accentColor, Color3.fromRGB(27, 25, 25))
+	ensurePointLight(trim, "AccentLight", accentColor, 18, 1.4)
+
+	return station, base, canopy
 end
 
 local function ensureFoodTruckMap()
-	Lighting.ClockTime = 14
-	Lighting.Brightness = 2.5
-	Lighting.Ambient = Color3.fromRGB(135, 155, 180)
-	Lighting.OutdoorAmbient = Color3.fromRGB(180, 190, 205)
+	Lighting.ClockTime = 17.3
+	Lighting.Brightness = 2.9
+	Lighting.Ambient = Color3.fromRGB(128, 118, 140)
+	Lighting.OutdoorAmbient = Color3.fromRGB(168, 156, 146)
+	Lighting.FogColor = Color3.fromRGB(255, 208, 170)
+	Lighting.FogEnd = 900
 
-	local foodTruck = Workspace:FindFirstChild("FoodTruck")
-	if not foodTruck then
-		foodTruck = Instance.new("Model")
-		foodTruck.Name = "FoodTruck"
-		foodTruck.Parent = Workspace
+	ensureLightingEffect("Atmosphere", "FestivalAtmosphere", {
+		Color = Color3.fromRGB(255, 220, 188),
+		Decay = Color3.fromRGB(255, 168, 125),
+		Density = 0.27,
+		Glare = 0.18,
+		Haze = 0.85,
+	})
+	ensureLightingEffect("BloomEffect", "FestivalBloom", {
+		Enabled = true,
+		Intensity = 0.28,
+		Size = 36,
+		Threshold = 1.1,
+	})
+	ensureLightingEffect("ColorCorrectionEffect", "FestivalGrade", {
+		Brightness = 0.03,
+		Contrast = 0.08,
+		Saturation = 0.16,
+		TintColor = Color3.fromRGB(255, 241, 225),
+	})
+	ensureLightingEffect("SunRaysEffect", "FestivalSunRays", {
+		Enabled = true,
+		Intensity = 0.08,
+		Spread = 0.72,
+	})
+
+	local foodTruck = ensureModel(Workspace, "FoodTruck")
+
+	ensurePart(foodTruck, "FestivalGround", {
+		Anchored = true,
+		Color = Color3.fromRGB(199, 188, 176),
+		Material = Enum.Material.Concrete,
+		Size = Vector3.new(84, 1, 62),
+		CFrame = CFrame.new(0, -0.5, -4),
+		Locked = true,
+	})
+
+	ensurePart(foodTruck, "FestivalPath", {
+		Anchored = true,
+		Color = Color3.fromRGB(98, 89, 102),
+		Material = Enum.Material.Slate,
+		Size = Vector3.new(34, 0.18, 26),
+		CFrame = CFrame.new(0, 0.12, -15),
+	})
+
+	ensurePart(foodTruck, "TruckDeck", {
+		Anchored = true,
+		Color = Color3.fromRGB(121, 77, 63),
+		Material = Enum.Material.WoodPlanks,
+		Size = Vector3.new(30, 0.4, 18),
+		CFrame = CFrame.new(0, 0.2, 1),
+	})
+
+	ensurePart(foodTruck, "TruckBase", {
+		Anchored = true,
+		Color = Color3.fromRGB(250, 106, 92),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(22, 2.2, 11),
+		CFrame = CFrame.new(0, 1.5, 1),
+	})
+
+	ensurePart(foodTruck, "TruckCab", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 210, 88),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(6, 4.4, 10.4),
+		CFrame = CFrame.new(7.6, 4.7, 1),
+	})
+
+	ensurePart(foodTruck, "TruckBody", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 141, 103),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(22, 6.2, 9.2),
+		CFrame = CFrame.new(0, 5.2, 1),
+	})
+
+	ensurePart(foodTruck, "TruckRoof", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 243, 213),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(23, 0.45, 10.2),
+		CFrame = CFrame.new(0, 8.55, 1),
+	})
+
+	ensurePart(foodTruck, "RoofTrim", {
+		Anchored = true,
+		CanCollide = false,
+		Color = Color3.fromRGB(98, 209, 255),
+		Material = Enum.Material.Neon,
+		Size = Vector3.new(23.2, 0.15, 0.5),
+		CFrame = CFrame.new(0, 8.75, -4.35),
+	})
+
+	ensurePart(foodTruck, "WindowFrame", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 243, 213),
+		Material = Enum.Material.Metal,
+		Size = Vector3.new(13, 0.25, 0.4),
+		CFrame = CFrame.new(0, 5.8, -3.85),
+	})
+
+	ensurePart(foodTruck, "ServiceWindow", {
+		Anchored = true,
+		Color = Color3.fromRGB(113, 219, 255),
+		Material = Enum.Material.Glass,
+		Size = Vector3.new(11.8, 2.6, 0.24),
+		CFrame = CFrame.new(0, 4.8, -3.9),
+		Transparency = 0.35,
+	})
+
+	local awning = ensurePart(foodTruck, "Awning", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 212, 103),
+		Material = Enum.Material.Fabric,
+		Size = Vector3.new(16, 0.35, 5.4),
+		CFrame = CFrame.new(0, 7.1, -6.85),
+	})
+	ensurePointLight(awning, "AwningGlow", Color3.fromRGB(255, 205, 124), 22, 1.2)
+
+	local menuSign = ensurePart(foodTruck, "MenuSign", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 245, 215),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(15.8, 2.2, 0.35),
+		CFrame = CFrame.new(0, 10.3, -4.15),
+	})
+	ensureSurfaceSign(menuSign, "MenuSurface", Enum.NormalId.Front, "TREND BONUS x2\nVIP BONUS x3", Color3.fromRGB(255, 248, 216), Color3.fromRGB(50, 34, 33), 54)
+
+	local titleSign = ensurePart(foodTruck, "HeaderSign", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 112, 130),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(11.8, 2, 0.45),
+		CFrame = CFrame.new(-2.8, 10.35, 5.35),
+	})
+	ensureSurfaceSign(titleSign, "HeaderSurface", Enum.NormalId.Back, "VIRAL KITCHEN", Color3.fromRGB(255, 120, 133), Color3.fromRGB(255, 252, 240), 64)
+	ensurePointLight(titleSign, "TitleGlow", Color3.fromRGB(255, 164, 162), 18, 1.5)
+
+	for wheelIndex, wheelData in ipairs({
+		{ name = "FrontLeftWheel", x = -6.5, z = -4.4 },
+		{ name = "FrontRightWheel", x = -6.5, z = 6.4 },
+		{ name = "RearLeftWheel", x = 6.8, z = -4.4 },
+		{ name = "RearRightWheel", x = 6.8, z = 6.4 },
+	}) do
+		local wheel = ensurePart(foodTruck, wheelData.name, {
+			Anchored = true,
+			Color = Color3.fromRGB(44, 41, 48),
+			Material = Enum.Material.SmoothPlastic,
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(2.6, 2.6, 2.6),
+			CFrame = CFrame.new(wheelData.x, 0.8, wheelData.z) * CFrame.Angles(0, 0, math.rad(90)),
+		})
+		ensurePart(foodTruck, wheelData.name .. "Hub", {
+			Anchored = true,
+			CanCollide = false,
+			Color = Color3.fromRGB(226, 220, 214),
+			Material = Enum.Material.Metal,
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.2, 1.2, 1.2),
+			CFrame = wheel.CFrame,
+		})
 	end
 
-	ensurePart(foodTruck, "FestivalGround", Vector3.new(64, 0.25, 52), CFrame.new(0, 0.05, -4), Color3.fromRGB(91, 194, 137), Enum.Material.Grass)
-	ensurePart(foodTruck, "TruckBase", Vector3.new(20, 1.2, 10), CFrame.new(0, 1.1, 1), Color3.fromRGB(255, 92, 92), Enum.Material.SmoothPlastic)
-	ensurePart(foodTruck, "TruckBody", Vector3.new(20, 5, 8), CFrame.new(0, 4.2, 1), Color3.fromRGB(255, 121, 75), Enum.Material.SmoothPlastic)
-	ensurePart(foodTruck, "ServiceWindow", Vector3.new(10, 2.8, 0.35), CFrame.new(0, 4.1, -3.2), Color3.fromRGB(95, 221, 255), Enum.Material.Glass)
-	ensurePart(foodTruck, "Awning", Vector3.new(14, 0.35, 4), CFrame.new(0, 6.6, -5), Color3.fromRGB(255, 214, 64), Enum.Material.SmoothPlastic)
-	ensurePart(foodTruck, "MenuSign", Vector3.new(14, 2, 0.4), CFrame.new(0, 7.7, -3.6), Color3.fromRGB(255, 245, 181), Enum.Material.SmoothPlastic)
-
-	ensureStation(foodTruck, "IngredientStation", "Ingredient", Vector3.new(-9, 1.1, -3), Color3.fromRGB(93, 215, 124), "Add Step")
-	ensureStation(foodTruck, "CookingStation", "Cooking", Vector3.new(0, 1.1, -3), Color3.fromRGB(255, 156, 74), "Cook Step")
-	ensureStation(foodTruck, "DrinkStation", "Drink", Vector3.new(9, 1.1, -3), Color3.fromRGB(80, 205, 255), "Mix Step")
-
-	local counter = ensurePart(foodTruck, "Counter", Vector3.new(12, 1.5, 3), CFrame.new(0, 1.1, -8), Color3.fromRGB(255, 234, 98), Enum.Material.SmoothPlastic)
+	local counter = ensurePart(foodTruck, "Counter", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 232, 122),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(13, 1.7, 3.4),
+		CFrame = CFrame.new(0, 1.35, -10.2),
+	})
 	counter:SetAttribute("StationType", "Serving")
 	ensurePrompt(counter, "Serve Customer", "Counter")
-	ensureBillboard(counter, "Counter\nServing", Color3.fromRGB(255, 255, 255))
+	ensureBillboard(counter, "Counter\nServing", Color3.fromRGB(255, 244, 188), Color3.fromRGB(28, 24, 21))
+	ensurePointLight(counter, "CounterGlow", Color3.fromRGB(255, 226, 122), 18, 1.1)
 
-	local upgradeStation = ensurePart(foodTruck, "UpgradeStation", Vector3.new(4, 2, 4), CFrame.new(13, 1.1, 4), Color3.fromRGB(188, 128, 255), Enum.Material.SmoothPlastic)
+	ensurePart(foodTruck, "CounterTop", {
+		Anchored = true,
+		CanCollide = false,
+		Color = Color3.fromRGB(255, 248, 224),
+		Material = Enum.Material.Neon,
+		Size = Vector3.new(13.2, 0.18, 3.6),
+		CFrame = counter.CFrame + Vector3.new(0, 0.95, 0),
+	})
+
+	ensureStation(foodTruck, "IngredientStation", "Ingredient", Vector3.new(-11, 1.25, -4.3), Color3.fromRGB(98, 221, 142), "Add Step", "Ingredient Station")
+	ensureStation(foodTruck, "CookingStation", "Cooking", Vector3.new(0, 1.25, -4.3), Color3.fromRGB(255, 150, 92), "Cook Step", "Cooking Station")
+	ensureStation(foodTruck, "DrinkStation", "Drink", Vector3.new(11, 1.25, -4.3), Color3.fromRGB(100, 207, 255), "Mix Step", "Drink Station")
+
+	local upgradeStation = ensurePart(foodTruck, "UpgradeStation", {
+		Anchored = true,
+		Color = Color3.fromRGB(181, 137, 255),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(4.4, 2.4, 4.4),
+		CFrame = CFrame.new(17, 1.25, 5.2),
+	})
 	upgradeStation:SetAttribute("StationType", "Upgrade")
 	ensurePrompt(upgradeStation, "Open Upgrades", "Upgrade Station")
-	ensureBillboard(upgradeStation, "Upgrade Station\nUpgrade", Color3.fromRGB(255, 255, 255))
+	ensureBillboard(upgradeStation, "Upgrade Station\nUpgrade", Color3.fromRGB(220, 194, 255), Color3.fromRGB(28, 24, 33))
+	ensurePart(foodTruck, "UpgradeStationBase", {
+		Anchored = true,
+		Color = Color3.fromRGB(68, 55, 78),
+		Material = Enum.Material.Concrete,
+		Size = Vector3.new(5.8, 1.1, 5.8),
+		CFrame = CFrame.new(17, 0.55, 5.2),
+	})
+	ensurePart(foodTruck, "UpgradeStationTrim", {
+		Anchored = true,
+		CanCollide = false,
+		Color = Color3.fromRGB(232, 221, 255),
+		Material = Enum.Material.Neon,
+		Size = Vector3.new(4.8, 0.2, 4.8),
+		CFrame = CFrame.new(17, 2.56, 5.2),
+	})
+	ensurePointLight(upgradeStation, "UpgradeGlow", Color3.fromRGB(206, 173, 255), 18, 1.5)
 
 	local queue = ensureFolder(foodTruck, "CustomerQueue")
-	for index, xPosition in ipairs({ -5, 0, 5 }) do
-		local spawnPoint = ensurePart(queue, "SpawnPoint" .. index, Vector3.new(3, 0.25, 3), CFrame.new(xPosition, 0.2, -16), Color3.fromRGB(255, 255, 255), Enum.Material.Neon)
-		spawnPoint.Transparency = 0.15
-		ensureBillboard(spawnPoint, "Queue " .. index, Color3.fromRGB(255, 255, 255))
+	for index, xPosition in ipairs({ -6, 0, 6 }) do
+		local spawnPoint = ensurePart(queue, "SpawnPoint" .. index, {
+			Anchored = true,
+			Color = Color3.fromRGB(255, 255, 255),
+			Material = Enum.Material.Neon,
+			Size = Vector3.new(3.4, 0.2, 3.4),
+			CFrame = CFrame.new(xPosition, 0.12, -19.2),
+			Transparency = 0.18,
+		})
+		ensureBillboard(spawnPoint, "Queue " .. index, Color3.fromRGB(255, 255, 255), Color3.fromRGB(28, 24, 21))
 	end
 
-	local customerExit = ensurePart(foodTruck, "CustomerExit", Vector3.new(8, 0.25, 3), CFrame.new(0, 0.2, -27), Color3.fromRGB(255, 154, 154), Enum.Material.Neon)
-	customerExit.Transparency = 0.2
-	ensureBillboard(customerExit, "Customer Exit", Color3.fromRGB(255, 255, 255))
+	local customerExit = ensurePart(foodTruck, "CustomerExit", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 146, 146),
+		Material = Enum.Material.Neon,
+		Size = Vector3.new(9, 0.2, 3.6),
+		CFrame = CFrame.new(0, 0.12, -29),
+		Transparency = 0.22,
+	})
+	ensureBillboard(customerExit, "Customer Exit", Color3.fromRGB(255, 219, 219), Color3.fromRGB(35, 25, 25))
 
 	ensureFolder(foodTruck, "ActiveCustomers")
 
-	for index = 1, 8 do
-		local x = -21 + (index - 1) * 6
-		local color
-		if index % 2 == 0 then
-			color = Color3.fromRGB(85, 210, 255)
-		else
-			color = Color3.fromRGB(255, 101, 160)
-		end
-		ensurePart(foodTruck, "FestivalLight" .. index, Vector3.new(1, 1, 1), CFrame.new(x, 8.5, -10), color, Enum.Material.Neon)
+	ensurePart(foodTruck, "QueueRailLeft", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 233, 180),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(0.35, 1.2, 12),
+		CFrame = CFrame.new(-9.1, 0.8, -16.3),
+	})
+	ensurePart(foodTruck, "QueueRailRight", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 233, 180),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(0.35, 1.2, 12),
+		CFrame = CFrame.new(9.1, 0.8, -16.3),
+	})
+	ensurePart(foodTruck, "QueueRailFront", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 233, 180),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(18.6, 1.2, 0.35),
+		CFrame = CFrame.new(0, 0.8, -10.5),
+	})
+
+	ensurePart(foodTruck, "FestivalArchLeft", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 210, 97),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(1.6, 8.5, 1.6),
+		CFrame = CFrame.new(-15, 4.25, -12.2),
+	})
+	ensurePart(foodTruck, "FestivalArchRight", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 210, 97),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(1.6, 8.5, 1.6),
+		CFrame = CFrame.new(15, 4.25, -12.2),
+	})
+	local archTop = ensurePart(foodTruck, "FestivalArchTop", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 106, 144),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(31, 1.2, 1.8),
+		CFrame = CFrame.new(0, 8.4, -12.2),
+	})
+	ensureSurfaceSign(archTop, "ArchSurface", Enum.NormalId.Front, "FOOD FESTIVAL\nTREND TRUCK ZONE", Color3.fromRGB(255, 114, 147), Color3.fromRGB(255, 247, 241), 50)
+
+	for index, xPosition in ipairs({ -21, -15, -9, -3, 3, 9, 15, 21 }) do
+		local color = if index % 2 == 0 then Color3.fromRGB(98, 209, 255) else Color3.fromRGB(255, 109, 154)
+		ensureDecorSphere(foodTruck, "FestivalLight" .. index, Vector3.new(xPosition, 9.2, -10.2), color, Vector3.new(0.9, 0.9, 0.9), 14, 1.7)
 	end
+
+	ensurePart(foodTruck, "StringLightPoleLeft", {
+		Anchored = true,
+		Color = Color3.fromRGB(86, 77, 83),
+		Material = Enum.Material.Metal,
+		Size = Vector3.new(0.5, 10, 0.5),
+		CFrame = CFrame.new(-24, 5, -8.8),
+	})
+	ensurePart(foodTruck, "StringLightPoleRight", {
+		Anchored = true,
+		Color = Color3.fromRGB(86, 77, 83),
+		Material = Enum.Material.Metal,
+		Size = Vector3.new(0.5, 10, 0.5),
+		CFrame = CFrame.new(24, 5, -8.8),
+	})
+
+	local leftTable = ensurePart(foodTruck, "LoungeTableLeft", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 242, 215),
+		Material = Enum.Material.WoodPlanks,
+		Size = Vector3.new(5, 0.35, 3.4),
+		CFrame = CFrame.new(-21, 1.9, 6),
+	})
+	local rightTable = ensurePart(foodTruck, "LoungeTableRight", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 242, 215),
+		Material = Enum.Material.WoodPlanks,
+		Size = Vector3.new(5, 0.35, 3.4),
+		CFrame = CFrame.new(21, 1.9, 6),
+	})
+
+	for _, tablePart in ipairs({ leftTable, rightTable }) do
+		for legIndex, offset in ipairs({
+			Vector3.new(-2.1, -1, -1.2),
+			Vector3.new(2.1, -1, -1.2),
+			Vector3.new(-2.1, -1, 1.2),
+			Vector3.new(2.1, -1, 1.2),
+		}) do
+			ensurePart(foodTruck, tablePart.Name .. "Leg" .. legIndex, {
+				Anchored = true,
+				Color = Color3.fromRGB(113, 84, 67),
+				Material = Enum.Material.WoodPlanks,
+				Size = Vector3.new(0.35, 2, 0.35),
+				CFrame = tablePart.CFrame + offset,
+			})
+		end
+	end
+
+	local planterLeft = ensurePart(foodTruck, "PlanterLeft", {
+		Anchored = true,
+		Color = Color3.fromRGB(103, 79, 60),
+		Material = Enum.Material.WoodPlanks,
+		Size = Vector3.new(3.4, 1.4, 3.4),
+		CFrame = CFrame.new(-27, 0.7, 8),
+	})
+	local planterRight = ensurePart(foodTruck, "PlanterRight", {
+		Anchored = true,
+		Color = Color3.fromRGB(103, 79, 60),
+		Material = Enum.Material.WoodPlanks,
+		Size = Vector3.new(3.4, 1.4, 3.4),
+		CFrame = CFrame.new(27, 0.7, 8),
+	})
+
+	ensureDecorSphere(planterLeft, "PlantGlow", planterLeft.Position + Vector3.new(0, 2.6, 0), Color3.fromRGB(118, 222, 138), Vector3.new(2.4, 2.4, 2.4), 8, 0.2)
+	ensureDecorSphere(planterRight, "PlantGlow", planterRight.Position + Vector3.new(0, 2.6, 0), Color3.fromRGB(118, 222, 138), Vector3.new(2.4, 2.4, 2.4), 8, 0.2)
+
+	local trendBoard = ensurePart(foodTruck, "TrendBoard", {
+		Anchored = true,
+		Color = Color3.fromRGB(255, 246, 228),
+		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(8, 3.4, 0.4),
+		CFrame = CFrame.new(-17.8, 4.6, -5),
+	})
+	ensureSurfaceSign(trendBoard, "TrendSurface", Enum.NormalId.Front, "TREND OF THE DAY\nCHECK THE HUD", Color3.fromRGB(255, 246, 228), Color3.fromRGB(43, 32, 34), 50)
 end
 
 local remotes = ensureRemoteEvents()
