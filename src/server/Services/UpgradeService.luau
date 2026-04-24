@@ -7,6 +7,7 @@ local UpgradeService = {}
 
 UpgradeService._remotes = nil
 UpgradeService._playerDataService = nil
+UpgradeService._plotManager = nil
 UpgradeService._initialized = false
 
 local function getUpgradeCost(currentLevel)
@@ -27,6 +28,11 @@ end
 function UpgradeService:HandleUpgradeRequest(player, payload)
 	if typeof(payload) ~= "table" or typeof(payload.upgradeId) ~= "string" then
 		self:_notify(player, "Invalid upgrade request.", "Error")
+		return
+	end
+
+	if not self._plotManager:GetPlayerPlot(player) then
+		self:_notify(player, "No free plots available. Please join another server.", "Warning")
 		return
 	end
 
@@ -54,13 +60,14 @@ function UpgradeService:HandleUpgradeRequest(player, payload)
 	self:_notify(player, upgradeDefinition.displayName .. " upgraded to level " .. newLevel .. ".", "Success")
 end
 
-function UpgradeService:Init(remotes, playerDataService)
+function UpgradeService:Init(remotes, playerDataService, plotManager)
 	if self._initialized then
 		return
 	end
 	self._initialized = true
 	self._remotes = remotes
 	self._playerDataService = playerDataService
+	self._plotManager = plotManager
 
 	remotes.UpgradeRequest.OnServerEvent:Connect(function(player, payload)
 		self:HandleUpgradeRequest(player, payload)

@@ -6,57 +6,77 @@ local GameConstants = require(ReplicatedStorage.Shared.GameConstants)
 local ViralRushService = {}
 
 ViralRushService._remotes = nil
-ViralRushService._isActive = false
-ViralRushService._endsAt = nil
-ViralRushService._token = 0
+ViralRushService._states = {}
 ViralRushService._initialized = false
 
-function ViralRushService:_buildPayload()
+function ViralRushService:_getState(player)
+	local state = self._states[player]
+	if not state then
+		state = {
+			isActive = false,
+			endsAt = nil,
+			token = 0,
+		}
+		self._states[player] = state
+	end
+
+	return state
+end
+
+function ViralRushService:_buildPayload(player)
+	local state = self:_getState(player)
 	return {
-		isActive = self._isActive,
-		endsAt = self._endsAt,
+		isActive = state.isActive,
+		endsAt = state.endsAt,
 	}
 end
 
-function ViralRushService:_broadcast()
-	self._remotes.ViralRushChanged:FireAllClients(self:_buildPayload())
+function ViralRushService:_send(player)
+	self._remotes.ViralRushChanged:FireClient(player, self:_buildPayload(player))
 end
 
 function ViralRushService:SendStatus(player)
-	self._remotes.ViralRushChanged:FireClient(player, self:_buildPayload())
+	self:_send(player)
 end
 
-function ViralRushService:IsActive()
-	if self._isActive and self._endsAt and workspace:GetServerTimeNow() >= self._endsAt then
-		self._isActive = false
-		self._endsAt = nil
+function ViralRushService:IsActive(player)
+	local state = self:_getState(player)
+	if state.isActive and state.endsAt and workspace:GetServerTimeNow() >= state.endsAt then
+		state.isActive = false
+		state.endsAt = nil
 	end
 
-	return self._isActive
+	return state.isActive
 end
 
-function ViralRushService:GetEndsAt()
-	return self._endsAt
+function ViralRushService:GetEndsAt(player)
+	return self:_getState(player).endsAt
 end
 
-function ViralRushService:StartViralRush()
+function ViralRushService:StartViralRush(player)
+	local state = self:_getState(player)
 	local now = workspace:GetServerTimeNow()
-	self._isActive = true
-	self._endsAt = now + GameConstants.VIRAL_RUSH_DURATION_SECONDS
-	self._token += 1
-	local token = self._token
+	state.isActive = true
+	state.endsAt = now + GameConstants.VIRAL_RUSH_DURATION_SECONDS
+	state.token += 1
+	local token = state.token
 
-	self:_broadcast()
+	self:_send(player)
 
 	task.delay(GameConstants.VIRAL_RUSH_DURATION_SECONDS, function()
-		if token ~= self._token then
+		if player.Parent ~= Players then
 			return
 		end
 
-		if self._endsAt and workspace:GetServerTimeNow() >= self._endsAt then
-			self._isActive = false
-			self._endsAt = nil
-			self:_broadcast()
+		local activeState = self:_getState(player)
+		if token ~= activeState.token then
+			return
+		end
+
+		if activeState.endsAt and workspace:GetServerTimeNow() >= activeState.endsAt then
+			activeState.isActive = false
+			activeState.endsAt = nil
+			self:_send(player)
 		end
 	end)
 end
@@ -72,6 +92,10 @@ function ViralRushService:Init(remotes)
 		task.defer(function()
 			self:SendStatus(player)
 		end)
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		self._states[player] = nil
 	end)
 end
 

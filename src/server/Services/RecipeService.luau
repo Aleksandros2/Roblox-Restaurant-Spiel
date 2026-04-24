@@ -8,6 +8,7 @@ local RecipeService = {}
 
 RecipeService._remotes = nil
 RecipeService._playerDataService = nil
+RecipeService._plotManager = nil
 RecipeService._dishes = {}
 RecipeService._initialized = false
 
@@ -69,6 +70,11 @@ function RecipeService:ClearDish(player)
 end
 
 function RecipeService:StartRecipe(player, recipeId)
+	if not self._plotManager:GetPlayerPlot(player) then
+		self:_notify(player, "No free plots available. Please join another server.", "Warning")
+		return
+	end
+
 	if not RecipeDefinitions.IsValidRecipeId(recipeId) then
 		self:_notify(player, "That recipe is not available.", "Error")
 		return
@@ -93,15 +99,36 @@ function RecipeService:_getStationDelay(player)
 	return math.max(GameConstants.UPGRADES.MIN_STATION_DELAY_SECONDS, delaySeconds)
 end
 
-function RecipeService:_isPlayerNearStation(player, stationType)
+function RecipeService:_isPlayerNearStation(player, stationType, stationPart)
 	local character = player.Character
 	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-	local foodTruck = workspace:FindFirstChild("FoodTruck")
-	if not rootPart or not foodTruck then
+	local plot = self._plotManager:GetPlayerPlot(player)
+	if not rootPart or not plot or not plot.RestaurantModel then
 		return false
 	end
 
-	for _, descendant in ipairs(foodTruck:GetDescendants()) do
+	if stationPart ~= nil then
+		if typeof(stationPart) ~= "Instance" then
+			return false
+		end
+
+		if not stationPart:IsA("BasePart") or not stationPart:GetAttribute("StationType") then
+			return false
+		end
+
+		if not self._plotManager:IsPlayerOwnerOfInstance(player, stationPart) then
+			self:_notify(player, "This is not your restaurant.", "Warning")
+			return false, "notOwner"
+		end
+
+		if stationPart:GetAttribute("StationType") ~= stationType then
+			return false
+		end
+
+		return (rootPart.Position - stationPart.Position).Magnitude <= GameConstants.MAX_STATION_INTERACTION_DISTANCE
+	end
+
+	for _, descendant in ipairs(plot.RestaurantModel:GetDescendants()) do
 		if descendant:IsA("BasePart") and descendant:GetAttribute("StationType") == stationType then
 			local distance = (rootPart.Position - descendant.Position).Magnitude
 			if distance <= GameConstants.MAX_STATION_INTERACTION_DISTANCE then
@@ -113,7 +140,7 @@ function RecipeService:_isPlayerNearStation(player, stationType)
 	return false
 end
 
-function RecipeService:AddRecipeStep(player, stepName, stationType)
+function RecipeService:AddRecipeStep(player, stepName, stationType, stationPart)
 	local dish = self._dishes[player]
 	if not dish then
 		self:_notify(player, "Choose a recipe first.", "Warning")
@@ -151,8 +178,11 @@ function RecipeService:AddRecipeStep(player, stepName, stationType)
 		return
 	end
 
-	if not self:_isPlayerNearStation(player, stationType) then
-		self:_notify(player, "Move closer to the " .. stationType .. " station.", "Warning")
+	local isNearStation, reason = self:_isPlayerNearStation(player, stationType, stationPart)
+	if not isNearStation then
+		if reason ~= "notOwner" then
+			self:_notify(player, "Move closer to the " .. stationType .. " station.", "Warning")
+		end
 		return
 	end
 
@@ -169,13 +199,14 @@ function RecipeService:AddRecipeStep(player, stepName, stationType)
 	end
 end
 
-function RecipeService:Init(remotes, playerDataService)
+function RecipeService:Init(remotes, playerDataService, plotManager)
 	if self._initialized then
 		return
 	end
 	self._initialized = true
 	self._remotes = remotes
 	self._playerDataService = playerDataService
+	self._plotManager = plotManager
 
 	remotes.StartRecipeRequest.OnServerEvent:Connect(function(player, payload)
 		if typeof(payload) ~= "table" or typeof(payload.recipeId) ~= "string" then
@@ -192,7 +223,7 @@ function RecipeService:Init(remotes, playerDataService)
 			return
 		end
 
-		self:AddRecipeStep(player, payload.stepName, payload.stationType)
+		self:AddRecipeStep(player, payload.stepName, payload.stationType, payload.station)
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)

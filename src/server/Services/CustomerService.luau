@@ -1,17 +1,21 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local GameConstants = require(ReplicatedStorage.Shared.GameConstants)
 local RecipeDefinitions = require(ReplicatedStorage.Shared.RecipeDefinitions)
+local StationBillboardManager = require(ServerScriptService:WaitForChild("StationBillboardManager"))
 
 local CustomerService = {}
 
 CustomerService._remotes = nil
 CustomerService._playerDataService = nil
+CustomerService._plotManager = nil
 CustomerService._trendService = nil
 CustomerService._recipeService = nil
 CustomerService._viralRushService = nil
-CustomerService._customers = {}
+CustomerService._customersByPlayer = {}
+CustomerService._lastSpawnAtByPlayer = {}
 CustomerService._customerSequence = 0
 CustomerService._random = Random.new()
 CustomerService._initialized = false
@@ -29,70 +33,6 @@ local RECIPE_ACCENTS = {
 	KoreanCornDog = Color3.fromRGB(255, 210, 95),
 }
 
-local function getFoodTruck()
-	return workspace:FindFirstChild("FoodTruck")
-end
-
-local function getQueueFolder()
-	local foodTruck = getFoodTruck()
-	if not foodTruck then
-		return nil
-	end
-
-	return foodTruck:FindFirstChild("CustomerQueue")
-end
-
-local function getActiveCustomersFolder()
-	local foodTruck = getFoodTruck()
-	if not foodTruck then
-		return nil
-	end
-
-	local folder = foodTruck:FindFirstChild("ActiveCustomers")
-	if not folder then
-		folder = Instance.new("Folder")
-		folder.Name = "ActiveCustomers"
-		folder.Parent = foodTruck
-	end
-
-	return folder
-end
-
-local function makeBillboard(parent, text, backgroundColor)
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "OrderBillboard"
-	billboard.AlwaysOnTop = true
-	billboard.LightInfluence = 0
-	billboard.MaxDistance = 140
-	billboard.Size = UDim2.fromOffset(240, 78)
-	billboard.StudsOffset = Vector3.new(0, 3.55, 0)
-	billboard.Parent = parent
-
-	local label = Instance.new("TextLabel")
-	label.Name = "Label"
-	label.BackgroundColor3 = backgroundColor
-	label.BackgroundTransparency = 0.05
-	label.BorderSizePixel = 0
-	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Enum.Font.GothamBold
-	label.Text = text
-	label.TextColor3 = Color3.fromRGB(30, 26, 26)
-	label.TextScaled = true
-	label.TextWrapped = true
-	label.Parent = billboard
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = label
-
-	local stroke = Instance.new("UIStroke")
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Color = Color3.fromRGB(255, 255, 255)
-	stroke.Thickness = 1
-	stroke.Transparency = 0.45
-	stroke.Parent = label
-end
-
 local function addPointLight(parent, color, range, brightness)
 	local pointLight = Instance.new("PointLight")
 	pointLight.Brightness = brightness
@@ -103,6 +43,22 @@ local function addPointLight(parent, color, range, brightness)
 	return pointLight
 end
 
+local function makeOrderBillboard(parent, customer)
+	local displayName = RecipeDefinitions.GetRecipeDisplayName(customer.orderRecipeId)
+	local queueOffset = (customer.queueIndex or 2) - 2
+	local cardYOffset = if customer.queueIndex == 2 then 3.15 else 2.75
+
+	StationBillboardManager.EnsureOrderCard(parent, {
+		backgroundColor = customer.isInfluencer and Color3.fromRGB(255, 225, 134) or Color3.fromRGB(255, 248, 228),
+		badge = if customer.isInfluencer then "VIP ORDER" else "ORDER",
+		maxDistance = 58,
+		size = UDim2.fromOffset(162, if customer.isInfluencer then 58 else 50),
+		studsOffset = Vector3.new(0, cardYOffset, 0),
+		studsOffsetWorldSpace = Vector3.new(queueOffset * 0.25, 0, 0),
+		title = displayName,
+	})
+end
+
 function CustomerService:_notify(player, message, notificationType)
 	self._remotes.NotificationEvent:FireClient(player, {
 		message = message,
@@ -110,8 +66,44 @@ function CustomerService:_notify(player, message, notificationType)
 	})
 end
 
-function CustomerService:_getQueueSpawnPoint(index)
-	local queueFolder = getQueueFolder()
+function CustomerService:_getCustomerBucket(player)
+	local bucket = self._customersByPlayer[player]
+	if not bucket then
+		bucket = {}
+		self._customersByPlayer[player] = bucket
+	end
+
+	return bucket
+end
+
+function CustomerService:_getRestaurant(player)
+	local plot = self._plotManager:GetPlayerPlot(player)
+	return plot and plot.RestaurantModel
+end
+
+function CustomerService:_getQueueFolder(player)
+	local restaurant = self:_getRestaurant(player)
+	return restaurant and restaurant:FindFirstChild("CustomerQueue")
+end
+
+function CustomerService:_getActiveCustomersFolder(player)
+	local restaurant = self:_getRestaurant(player)
+	if not restaurant then
+		return nil
+	end
+
+	local folder = restaurant:FindFirstChild("ActiveCustomers")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "ActiveCustomers"
+		folder.Parent = restaurant
+	end
+
+	return folder
+end
+
+function CustomerService:_getQueueSpawnPoint(player, index)
+	local queueFolder = self:_getQueueFolder(player)
 	if not queueFolder then
 		return nil
 	end
@@ -119,16 +111,16 @@ function CustomerService:_getQueueSpawnPoint(index)
 	return queueFolder:FindFirstChild("SpawnPoint" .. index)
 end
 
-function CustomerService:_getOpenQueueIndex()
+function CustomerService:_getOpenQueueIndex(player)
 	local used = {}
-	for _, customer in pairs(self._customers) do
+	for _, customer in pairs(self:_getCustomerBucket(player)) do
 		if customer.queueIndex then
 			used[customer.queueIndex] = true
 		end
 	end
 
 	for index = 1, GameConstants.MAX_ACTIVE_CUSTOMERS do
-		if not used[index] and self:_getQueueSpawnPoint(index) then
+		if not used[index] and self:_getQueueSpawnPoint(player, index) then
 			return index
 		end
 	end
@@ -147,9 +139,9 @@ function CustomerService:_buildCustomerPayload(customer)
 	}
 end
 
-function CustomerService:_createCustomerModel(customer)
-	local spawnPoint = self:_getQueueSpawnPoint(customer.queueIndex)
-	local activeFolder = getActiveCustomersFolder()
+function CustomerService:_createCustomerModel(player, customer)
+	local spawnPoint = self:_getQueueSpawnPoint(player, customer.queueIndex)
+	local activeFolder = self:_getActiveCustomersFolder(player)
 	if not spawnPoint or not activeFolder then
 		return nil
 	end
@@ -162,6 +154,8 @@ function CustomerService:_createCustomerModel(customer)
 	model:SetAttribute("CustomerId", customer.customerId)
 	model:SetAttribute("OrderRecipeId", customer.orderRecipeId)
 	model:SetAttribute("IsInfluencer", customer.isInfluencer)
+	model:SetAttribute("PlotId", spawnPoint:GetAttribute("PlotId"))
+	model:SetAttribute("OwnerUserId", player.UserId)
 	model.Parent = activeFolder
 
 	local basePad = Instance.new("Part")
@@ -171,11 +165,11 @@ function CustomerService:_createCustomerModel(customer)
 	basePad.Shape = Enum.PartType.Cylinder
 	basePad.Size = Vector3.new(0.22, 3.4, 3.4)
 	basePad.Color = accentColor
-	basePad.Material = Enum.Material.Neon
-	basePad.Transparency = 0.18
+	basePad.Material = Enum.Material.SmoothPlastic
+	basePad.Transparency = 0.32
 	basePad.CFrame = CFrame.new(spawnPoint.Position + Vector3.new(0, 0.14, 0)) * CFrame.Angles(0, 0, math.rad(90))
 	basePad.Parent = model
-	addPointLight(basePad, accentColor, 10, 1.2)
+	addPointLight(basePad, accentColor, 7, 0.35)
 
 	local body = Instance.new("Part")
 	body.Name = "Body"
@@ -260,20 +254,17 @@ function CustomerService:_createCustomerModel(customer)
 		halo.Material = Enum.Material.Neon
 		halo.CFrame = CFrame.new(head.Position + Vector3.new(0, 1.45, 0)) * CFrame.Angles(0, 0, math.rad(90))
 		halo.Parent = model
-		addPointLight(halo, Color3.fromRGB(255, 214, 92), 12, 1.5)
+		addPointLight(halo, Color3.fromRGB(255, 214, 92), 8, 0.5)
 	end
 
-	local labelText = RecipeDefinitions.GetRecipeDisplayName(customer.orderRecipeId)
-	if customer.isInfluencer then
-		labelText = "Influencer\n" .. labelText
-	end
-	makeBillboard(head, labelText, customer.isInfluencer and Color3.fromRGB(255, 214, 95) or Color3.fromRGB(255, 248, 228))
+	makeOrderBillboard(head, customer)
 
 	return model
 end
 
-function CustomerService:_removeCustomer(customerId, reason)
-	local customer = self._customers[customerId]
+function CustomerService:_removeCustomer(player, customerId, reason)
+	local bucket = self:_getCustomerBucket(player)
+	local customer = bucket[customerId]
 	if not customer then
 		return
 	end
@@ -282,19 +273,32 @@ function CustomerService:_removeCustomer(customerId, reason)
 		customer.model:Destroy()
 	end
 
-	self._customers[customerId] = nil
-	self._remotes.CustomerRemoved:FireAllClients({
+	bucket[customerId] = nil
+	self._remotes.CustomerRemoved:FireClient(player, {
 		customerId = customerId,
 		reason = reason,
 	})
 end
 
-function CustomerService:_spawnCustomer()
-	if self:_countActiveCustomers() >= GameConstants.MAX_ACTIVE_CUSTOMERS then
+function CustomerService:_countActiveCustomers(player)
+	local count = 0
+	for _ in pairs(self:_getCustomerBucket(player)) do
+		count += 1
+	end
+
+	return count
+end
+
+function CustomerService:_spawnCustomer(player)
+	if not self._plotManager:GetPlayerPlot(player) then
 		return
 	end
 
-	local queueIndex = self:_getOpenQueueIndex()
+	if self:_countActiveCustomers(player) >= GameConstants.MAX_ACTIVE_CUSTOMERS then
+		return
+	end
+
+	local queueIndex = self:_getOpenQueueIndex(player)
 	if not queueIndex then
 		return
 	end
@@ -302,7 +306,7 @@ function CustomerService:_spawnCustomer()
 	self._customerSequence += 1
 	local recipeId = RecipeDefinitions.GetRandomRecipeId(self._random)
 	local customer = {
-		customerId = "Customer_" .. self._customerSequence,
+		customerId = "P" .. player.UserId .. "_Customer_" .. self._customerSequence,
 		orderRecipeId = recipeId,
 		isInfluencer = self._random:NextNumber() <= GameConstants.INFLUENCER_CHANCE,
 		spawnTime = workspace:GetServerTimeNow(),
@@ -311,37 +315,36 @@ function CustomerService:_spawnCustomer()
 		model = nil,
 	}
 
-	customer.model = self:_createCustomerModel(customer)
-	self._customers[customer.customerId] = customer
+	customer.model = self:_createCustomerModel(player, customer)
+	if not customer.model then
+		return
+	end
 
-	self._remotes.CustomerSpawned:FireAllClients(self:_buildCustomerPayload(customer))
+	self:_getCustomerBucket(player)[customer.customerId] = customer
+
+	self._remotes.CustomerSpawned:FireClient(player, self:_buildCustomerPayload(customer))
 
 	task.delay(customer.timeoutSeconds, function()
-		local activeCustomer = self._customers[customer.customerId]
+		if player.Parent ~= Players then
+			return
+		end
+
+		local activeCustomer = self:_getCustomerBucket(player)[customer.customerId]
 		if activeCustomer and activeCustomer.spawnTime == customer.spawnTime then
-			self:_removeCustomer(customer.customerId, "TimedOut")
+			self:_removeCustomer(player, customer.customerId, "TimedOut")
 		end
 	end)
 end
 
-function CustomerService:_countActiveCustomers()
-	local count = 0
-	for _ in pairs(self._customers) do
-		count += 1
-	end
-
-	return count
-end
-
-function CustomerService:_getSpawnInterval()
+function CustomerService:_getSpawnInterval(player)
 	local baseInterval
-	if self._viralRushService:IsActive() then
+	if self._viralRushService:IsActive(player) then
 		baseInterval = GameConstants.CUSTOMER_SPAWN_INTERVAL_VIRAL_RUSH
 	else
 		baseInterval = GameConstants.CUSTOMER_SPAWN_INTERVAL_NORMAL
 	end
 
-	local biggerCounterLevel = self._playerDataService:GetHighestUpgradeLevel("BiggerCounter")
+	local biggerCounterLevel = self._playerDataService:GetUpgradeLevel(player, "BiggerCounter")
 	local upgradedInterval = baseInterval
 		- (biggerCounterLevel * GameConstants.UPGRADES.BIGGER_COUNTER_INTERVAL_REDUCTION_SECONDS)
 
@@ -374,15 +377,47 @@ function CustomerService:_calculateRewards(player, customer)
 	return money, viralPoints, bonusLabels
 end
 
+function CustomerService:_validateServeStation(player, payload)
+	if typeof(payload) ~= "table" or payload.station == nil then
+		return true
+	end
+
+	if typeof(payload.station) ~= "Instance" or not payload.station:IsA("BasePart") then
+		return false
+	end
+
+	if payload.station:GetAttribute("StationType") ~= "Serving" then
+		return false
+	end
+
+	if not self._plotManager:IsPlayerOwnerOfInstance(player, payload.station) then
+		self:_notify(player, "This is not your restaurant.", "Warning")
+		return false
+	end
+
+	local character = player.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	if not rootPart or (rootPart.Position - payload.station.Position).Magnitude > GameConstants.MAX_STATION_INTERACTION_DISTANCE then
+		self:_notify(player, "Move closer to your counter.", "Warning")
+		return false
+	end
+
+	return true
+end
+
 function CustomerService:HandleServeRequest(player, payload)
 	if typeof(payload) ~= "table" or typeof(payload.customerId) ~= "string" then
 		self:_notify(player, "Choose a customer to serve.", "Warning")
 		return
 	end
 
-	local customer = self._customers[payload.customerId]
+	if not self:_validateServeStation(player, payload) then
+		return
+	end
+
+	local customer = self:_getCustomerBucket(player)[payload.customerId]
 	if not customer then
-		self:_notify(player, "That customer is no longer in line.", "Warning")
+		self:_notify(player, "That customer is no longer in your line.", "Warning")
 		return
 	end
 
@@ -401,10 +436,10 @@ function CustomerService:HandleServeRequest(player, payload)
 	local money, viralPoints, bonusLabels = self:_calculateRewards(player, customer)
 	self._playerDataService:AddCurrency(player, money, viralPoints)
 	self._recipeService:ClearDish(player)
-	self:_removeCustomer(customer.customerId, "Served")
+	self:_removeCustomer(player, customer.customerId, "Served")
 
 	if customer.isInfluencer then
-		self._viralRushService:StartViralRush()
+		self._viralRushService:StartViralRush(player)
 	end
 
 	local bonusText = ""
@@ -416,9 +451,23 @@ function CustomerService:HandleServeRequest(player, payload)
 end
 
 function CustomerService:SendExistingCustomers(player)
-	for _, customer in pairs(self._customers) do
+	for _, customer in pairs(self:_getCustomerBucket(player)) do
 		self._remotes.CustomerSpawned:FireClient(player, self:_buildCustomerPayload(customer))
 	end
+end
+
+function CustomerService:CleanupPlayer(player)
+	local bucket = self._customersByPlayer[player]
+	if bucket then
+		for _, customer in pairs(bucket) do
+			if customer.model then
+				customer.model:Destroy()
+			end
+		end
+	end
+
+	self._customersByPlayer[player] = nil
+	self._lastSpawnAtByPlayer[player] = nil
 end
 
 function CustomerService:Init(remotes, services)
@@ -428,6 +477,7 @@ function CustomerService:Init(remotes, services)
 	self._initialized = true
 	self._remotes = remotes
 	self._playerDataService = services.PlayerDataService
+	self._plotManager = services.PlotManager
 	self._trendService = services.TrendService
 	self._recipeService = services.RecipeService
 	self._viralRushService = services.ViralRushService
@@ -442,14 +492,20 @@ function CustomerService:Init(remotes, services)
 		end)
 	end)
 
+	Players.PlayerRemoving:Connect(function(player)
+		self:CleanupPlayer(player)
+	end)
+
 	task.spawn(function()
 		task.wait(2)
-		local lastSpawnAt = 0
 		while true do
 			local now = workspace:GetServerTimeNow()
-			if now - lastSpawnAt >= self:_getSpawnInterval() then
-				self:_spawnCustomer()
-				lastSpawnAt = now
+			for _, player in ipairs(Players:GetPlayers()) do
+				local lastSpawnAt = self._lastSpawnAtByPlayer[player] or 0
+				if now - lastSpawnAt >= self:_getSpawnInterval(player) then
+					self:_spawnCustomer(player)
+					self._lastSpawnAtByPlayer[player] = now
+				end
 			end
 
 			task.wait(0.5)

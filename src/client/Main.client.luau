@@ -188,6 +188,14 @@ local function addPadding(parent, horizontal, vertical)
 	})
 end
 
+local function addTextSizeConstraint(parent, minSize, maxSize)
+	return create("UITextSizeConstraint", {
+		MaxTextSize = maxSize or 18,
+		MinTextSize = minSize or 9,
+		Parent = parent,
+	})
+end
+
 local function setText(object, text)
 	if object then
 		object.Text = text
@@ -304,10 +312,42 @@ local function getOnlyActiveCustomerId()
 	return nil
 end
 
+local function getViewportSize()
+	local camera = workspace.CurrentCamera
+	return if camera then camera.ViewportSize else Vector2.new(1280, 720)
+end
+
+local function getResponsiveScale()
+	local viewportSize = getViewportSize()
+	local widthScale = math.clamp(viewportSize.X / 900, 0.84, 1)
+	local heightScale = math.clamp(viewportSize.Y / 620, 0.86, 1)
+	return math.min(widthScale, heightScale)
+end
+
+local function applyResponsiveLayout()
+	local viewportSize = getViewportSize()
+	local narrow = viewportSize.X < 720
+
+	if ui.questFrame then
+		ui.questFrame.Position = narrow and UDim2.new(0.5, 0, 0, 78) or UDim2.new(0.5, 0, 0, 12)
+	end
+	if ui.badgeRow then
+		ui.badgeRow.Position = narrow and UDim2.new(0.5, 0, 0, 146) or UDim2.new(0.5, 0, 0, 80)
+	end
+	if ui.notificationContainer then
+		ui.notificationContainer.Position = narrow and UDim2.fromOffset(12, 184) or UDim2.fromOffset(12, 88)
+	end
+	if ui.rightShortcutFrame then
+		ui.rightShortcutFrame.Visible = viewportSize.X >= 640
+	end
+end
+
 local function applyUiScale()
 	if ui.rootScale then
-		ui.rootScale.Scale = if uiState.compactScale then 0.92 else 1
+		local manualScale = if uiState.compactScale then 0.92 else 1
+		ui.rootScale.Scale = getResponsiveScale() * manualScale
 	end
+	applyResponsiveLayout()
 end
 
 local function refreshNavSelection()
@@ -574,28 +614,48 @@ local function refreshOrdersPanel()
 	ui.orderRows = {}
 	ui.ordersEmptyState.Visible = #customerOrder == 0
 
-	for _, customerId in ipairs(customerOrder) do
+	for index, customerId in ipairs(customerOrder) do
 		local customer = customers[customerId]
 		if customer then
 			local selected = selectedCustomerId == customerId
 			local row = makeButton(ui.ordersList, customerId, selected and HUD_COLORS.blue or HUD_COLORS.panelDark)
-			row.Size = UDim2.new(1, 0, 0, 58)
+			row.LayoutOrder = index
+			row.Size = UDim2.new(1, 0, 0, 66)
 			row.BackgroundTransparency = selected and 0 or 0.04
 
+			local accent = create("Frame", {
+				Name = "Accent",
+				BackgroundColor3 = RECIPE_COLORS[customer.orderRecipeId] or HUD_COLORS.green,
+				BorderSizePixel = 0,
+				Position = UDim2.fromOffset(0, 0),
+				Size = UDim2.new(0, 6, 1, 0),
+				ZIndex = 3,
+				Parent = row,
+			})
+			addCorner(accent, 14)
+
 			local title = makeLabel(row, "OrderName", customer.orderDisplayName, 14, selected and HUD_COLORS.white or HUD_COLORS.text, Enum.Font.GothamBold)
-			title.Position = UDim2.fromOffset(12, 6)
-			title.Size = UDim2.new(1, -104, 0, 16)
+			title.Position = UDim2.fromOffset(16, 8)
+			title.Size = UDim2.new(1, -112, 0, 20)
+			title.TextScaled = true
+			title.ZIndex = 3
+			addTextSizeConstraint(title, 10, 15)
 
 			local timer = makeLabel(row, "OrderTimer", "0:00", 12, selected and HUD_COLORS.white or HUD_COLORS.subtext, Enum.Font.Gotham)
 			timer.AnchorPoint = Vector2.new(1, 0)
+			timer.BackgroundColor3 = selected and HUD_COLORS.blueDark or HUD_COLORS.panel
+			timer.BackgroundTransparency = selected and 0.18 or 0
 			timer.Position = UDim2.new(1, -12, 0, 8)
-			timer.Size = UDim2.fromOffset(52, 14)
+			timer.Size = UDim2.fromOffset(58, 22)
 			timer.TextXAlignment = Enum.TextXAlignment.Right
+			timer.ZIndex = 3
+			addCorner(timer, 9)
 
 			local subtitleText = if customer.isInfluencer then "Influencer order" else "Festival customer"
 			local subtitle = makeLabel(row, "OrderSubtitle", subtitleText, 12, selected and HUD_COLORS.white or HUD_COLORS.subtext, Enum.Font.Gotham)
-			subtitle.Position = UDim2.fromOffset(12, 26)
-			subtitle.Size = UDim2.new(1, -24, 0, 14)
+			subtitle.Position = UDim2.fromOffset(16, 34)
+			subtitle.Size = UDim2.new(1, -92, 0, 16)
+			subtitle.ZIndex = 3
 
 			if customer.isInfluencer then
 				local vipBadge = create("TextLabel", {
@@ -606,8 +666,9 @@ local function refreshOrdersPanel()
 					Text = "VIP",
 					TextColor3 = HUD_COLORS.white,
 					TextSize = 11,
-					Position = UDim2.new(1, -70, 0, 30),
+					Position = UDim2.new(1, -66, 0, 38),
 					Size = UDim2.fromOffset(44, 18),
+					ZIndex = 3,
 					Parent = row,
 				})
 				addCorner(vipBadge, 9)
@@ -665,7 +726,7 @@ local function makePanel(name, title, alignRight, panelHeight)
 		Position = alignRight and UDim2.new(1, -88, 1, -108) or UDim2.new(0.5, 0, 1, -108),
 		Size = alignRight and UDim2.new(0.68, 0, 0.26, 0) or UDim2.new(0.82, 0, 0.42, 0),
 		Visible = false,
-		ZIndex = 5,
+		ZIndex = 20,
 		Parent = ui.root,
 	})
 	addCorner(panel, 20)
@@ -680,7 +741,7 @@ local function makePanel(name, title, alignRight, panelHeight)
 	local titleLabel = makeLabel(panel, "Title", title, 18, HUD_COLORS.text, Enum.Font.GothamBold)
 	titleLabel.Position = UDim2.fromOffset(16, 10)
 	titleLabel.Size = UDim2.new(1, -58, 0, 24)
-	titleLabel.ZIndex = 6
+	titleLabel.ZIndex = 21
 
 	local closeButton = create("TextButton", {
 		Name = "CloseButton",
@@ -693,7 +754,7 @@ local function makePanel(name, title, alignRight, panelHeight)
 		Text = "X",
 		TextColor3 = HUD_COLORS.text,
 		TextSize = 12,
-		ZIndex = 6,
+		ZIndex = 21,
 		Parent = panel,
 	})
 	addCorner(closeButton, 10)
@@ -704,7 +765,7 @@ local function makePanel(name, title, alignRight, panelHeight)
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(14, 42),
 		Size = UDim2.new(1, -28, 1, -56),
-		ZIndex = 6,
+		ZIndex = 21,
 		Parent = panel,
 	})
 
@@ -719,15 +780,16 @@ local function buildQuestFrame()
 		BackgroundColor3 = HUD_COLORS.panel,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0.5, 0, 0, 12),
-		Size = UDim2.fromOffset(350, 55),
+		Size = UDim2.new(0.36, 0, 0, 60),
 		ZIndex = 2,
 		Parent = ui.root,
 	})
+	ui.questFrame = frame
 	addCorner(frame, 18)
 	addStroke(frame, HUD_COLORS.panelLine, 1, 0.12)
 	create("UISizeConstraint", {
-		MaxSize = Vector2.new(380, 64),
-		MinSize = Vector2.new(280, 52),
+		MaxSize = Vector2.new(390, 64),
+		MinSize = Vector2.new(286, 56),
 		Parent = frame,
 	})
 
@@ -735,22 +797,32 @@ local function buildQuestFrame()
 		Name = "Icon",
 		BackgroundColor3 = HUD_COLORS.orange,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(30, 30),
+		Position = UDim2.fromOffset(12, 13),
+		Size = UDim2.fromOffset(34, 34),
 		ZIndex = 3,
 		Parent = frame,
 	})
 	addCorner(icon, 10)
+	create("UIAspectRatioConstraint", {
+		AspectRatio = 1,
+		Parent = icon,
+	})
 	local iconLabel = makeLabel(icon, "IconLabel", "GOAL", 9, HUD_COLORS.white, Enum.Font.GothamBold)
 	iconLabel.Size = UDim2.fromScale(1, 1)
 	iconLabel.TextXAlignment = Enum.TextXAlignment.Center
+	iconLabel.TextScaled = true
+	addTextSizeConstraint(iconLabel, 7, 10)
+
+	local header = makeLabel(frame, "QuestHeader", "Daily Goal", 11, HUD_COLORS.subtext, Enum.Font.GothamBold)
+	header.Position = UDim2.fromOffset(56, 7)
+	header.Size = UDim2.new(1, -126, 0, 14)
 
 	ui.questTitle = makeLabel(frame, "QuestTitle", "", 15, HUD_COLORS.text, Enum.Font.GothamBold)
-	ui.questTitle.Position = UDim2.fromOffset(52, 8)
-	ui.questTitle.Size = UDim2.new(1, -112, 0, 18)
+	ui.questTitle.Position = UDim2.fromOffset(56, 21)
+	ui.questTitle.Size = UDim2.new(1, -128, 0, 18)
 	ui.questProgress = makeLabel(frame, "QuestProgress", "", 13, HUD_COLORS.subtext, Enum.Font.Gotham)
 	ui.questProgress.AnchorPoint = Vector2.new(1, 0)
-	ui.questProgress.Position = UDim2.new(1, -12, 0, 8)
+	ui.questProgress.Position = UDim2.new(1, -12, 0, 11)
 	ui.questProgress.Size = UDim2.fromOffset(64, 18)
 	ui.questProgress.TextXAlignment = Enum.TextXAlignment.Right
 
@@ -758,8 +830,8 @@ local function buildQuestFrame()
 		Name = "ProgressBack",
 		BackgroundColor3 = HUD_COLORS.panelDark,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(52, 30),
-		Size = UDim2.new(1, -64, 0, 12),
+		Position = UDim2.fromOffset(56, 42),
+		Size = UDim2.new(1, -68, 0, 10),
 		ZIndex = 3,
 		Parent = frame,
 	})
@@ -800,10 +872,16 @@ local function buildBadgeRow()
 		Name = "BadgeRow",
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0.5, 0, 0, 74),
-		Size = UDim2.fromOffset(420, 28),
+		Position = UDim2.new(0.5, 0, 0, 80),
+		Size = UDim2.new(0.64, 0, 0, 30),
 		ZIndex = 2,
 		Parent = ui.root,
+	})
+	ui.badgeRow = row
+	create("UISizeConstraint", {
+		MaxSize = Vector2.new(430, 34),
+		MinSize = Vector2.new(280, 28),
+		Parent = row,
 	})
 	create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
@@ -894,17 +972,22 @@ end
 local function buildCurrencyFrame()
 	local frame = create("Frame", {
 		Name = "CurrencyFrame",
-		AnchorPoint = Vector2.new(0, 1),
+		AnchorPoint = Vector2.new(0, 0),
 		BackgroundColor3 = HUD_COLORS.panel,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 12, 1, -16),
-		Size = UDim2.fromOffset(186, 66),
+		Position = UDim2.new(0, 12, 0, 14),
+		Size = UDim2.new(0.18, 0, 0, 58),
 		ZIndex = 2,
 		Parent = ui.root,
 	})
 	addCorner(frame, 18)
 	addStroke(frame, HUD_COLORS.panelLine, 1, 0.12)
 	addPadding(frame, 12, 10)
+	create("UISizeConstraint", {
+		MaxSize = Vector2.new(184, 62),
+		MinSize = Vector2.new(150, 54),
+		Parent = frame,
+	})
 
 	local vpRow = create("Frame", {
 		Name = "VpRow",
@@ -942,39 +1025,50 @@ local function buildBottomNav()
 		AnchorPoint = Vector2.new(0.5, 1),
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0.5, 0, 1, -16),
-		Size = UDim2.fromOffset(340, 78),
+		Size = UDim2.new(0.9, 0, 0, 78),
 		ZIndex = 2,
 		Parent = ui.root,
 	})
 	create("UISizeConstraint", {
-		MaxSize = Vector2.new(390, 86),
-		MinSize = Vector2.new(300, 72),
+		MaxSize = Vector2.new(470, 86),
+		MinSize = Vector2.new(318, 72),
 		Parent = frame,
 	})
 	create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		Padding = UDim.new(0, 8),
+		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = frame,
 	})
 
 	for _, definition in ipairs(NAVIGATION) do
 		local button = makeButton(frame, definition.panel .. "NavButton", HUD_COLORS.blueDark)
-		button.Size = UDim2.fromOffset(60, 60)
+		button.Size = UDim2.new(0.18, 0, 0, 66)
 		button.ZIndex = 2
+		create("UISizeConstraint", {
+			MaxSize = Vector2.new(78, 66),
+			MinSize = Vector2.new(54, 60),
+			Parent = button,
+		})
 
-		local short = makeLabel(button, "Short", definition.short, 11, HUD_COLORS.white, Enum.Font.GothamBold)
-		short.Position = UDim2.fromOffset(8, 11)
-		short.Size = UDim2.new(1, -16, 0, 14)
+		local short = makeLabel(button, "Short", definition.short, 14, HUD_COLORS.white, Enum.Font.GothamBold)
+		short.Position = UDim2.fromOffset(7, 10)
+		short.Size = UDim2.new(1, -14, 0, 18)
+		short.TextScaled = true
 		short.TextXAlignment = Enum.TextXAlignment.Center
 		short.TextYAlignment = Enum.TextYAlignment.Center
+		short.ZIndex = 3
+		addTextSizeConstraint(short, 10, 16)
 
-		local title = makeLabel(button, "Title", definition.title, 10, HUD_COLORS.white, Enum.Font.Gotham)
-		title.Position = UDim2.fromOffset(4, 30)
-		title.Size = UDim2.new(1, -8, 0, 12)
+		local title = makeLabel(button, "Title", definition.title, 11, HUD_COLORS.white, Enum.Font.Gotham)
+		title.Position = UDim2.fromOffset(5, 31)
+		title.Size = UDim2.new(1, -10, 0, 14)
+		title.TextScaled = true
 		title.TextXAlignment = Enum.TextXAlignment.Center
 		title.TextYAlignment = Enum.TextYAlignment.Center
+		title.ZIndex = 3
+		addTextSizeConstraint(title, 8, 12)
 
 		local hotkey = create("TextLabel", {
 			Name = "Hotkey",
@@ -983,14 +1077,18 @@ local function buildBottomNav()
 			BorderSizePixel = 0,
 			Font = Enum.Font.GothamBold,
 			Position = UDim2.new(1, -4, 1, -4),
-			Size = UDim2.fromOffset(18, 18),
+			Size = UDim2.fromOffset(20, 20),
 			Text = definition.hotkey,
 			TextColor3 = HUD_COLORS.text,
-			TextSize = 10,
+			TextSize = 11,
 			ZIndex = 3,
 			Parent = button,
 		})
 		addCorner(hotkey, 9)
+		create("UIAspectRatioConstraint", {
+			AspectRatio = 1,
+			Parent = hotkey,
+		})
 
 		button.MouseButton1Click:Connect(function()
 			togglePanel(definition.panel)
@@ -1010,10 +1108,16 @@ local function buildRightShortcuts()
 		Name = "RightShortcutFrame",
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
-		Position = UDim2.new(1, -12, 0.58, 0),
-		Size = UDim2.fromOffset(74, 240),
+		Position = UDim2.new(1, -12, 0.56, 0),
+		Size = UDim2.new(0.13, 0, 0, 150),
 		ZIndex = 2,
 		Parent = ui.root,
+	})
+	ui.rightShortcutFrame = frame
+	create("UISizeConstraint", {
+		MaxSize = Vector2.new(108, 160),
+		MinSize = Vector2.new(86, 132),
+		Parent = frame,
 	})
 	create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
@@ -1026,11 +1130,14 @@ local function buildRightShortcuts()
 
 	local function addShortcut(name, labelText, callback)
 		local button = makeButton(frame, name .. "Button", HUD_COLORS.blue)
-		button.Size = UDim2.fromOffset(62, 34)
+		button.Size = UDim2.new(1, 0, 0, 38)
 		button.ZIndex = 2
-		local label = makeLabel(button, "Label", labelText, 10, HUD_COLORS.white, Enum.Font.GothamBold)
+		local label = makeLabel(button, "Label", labelText, 12, HUD_COLORS.white, Enum.Font.GothamBold)
 		label.Size = UDim2.fromScale(1, 1)
+		label.TextScaled = true
 		label.TextXAlignment = Enum.TextXAlignment.Center
+		label.ZIndex = 3
+		addTextSizeConstraint(label, 9, 13)
 		button.MouseButton1Click:Connect(callback)
 		ui.shortcutButtons[name] = label
 	end
@@ -1040,14 +1147,8 @@ local function buildRightShortcuts()
 		refreshSettingsPanel()
 		pushNotification("Music toggled locally.", "Info")
 	end)
-	addShortcut("Trophy", "Trophy", function()
-		pushNotification("Achievements are coming soon.", "Info")
-	end)
-	addShortcut("Quest", "Quest", function()
+	addShortcut("Quest", "Goal", function()
 		pushNotification(string.format("%s (%d/%d)", questState.text, questState.current, questState.target), "Info")
-	end)
-	addShortcut("Map", "Map", function()
-		pushNotification("Map shortcuts are coming soon.", "Info")
 	end)
 	addShortcut("Settings", "Settings", function()
 		togglePanel(PANELS.Settings)
@@ -1306,6 +1407,22 @@ local function buildSettingsPanel()
 	end)
 end
 
+local function connectViewportScale()
+	local function connectCamera(camera)
+		if not camera then
+			return
+		end
+
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(applyUiScale)
+	end
+
+	connectCamera(workspace.CurrentCamera)
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+		connectCamera(workspace.CurrentCamera)
+		applyUiScale()
+	end)
+end
+
 local function buildUi()
 	for _, child in ipairs(screenGui:GetChildren()) do
 		if child ~= script then
@@ -1316,6 +1433,7 @@ local function buildUi()
 	screenGui.ResetOnSpawn = false
 	screenGui.IgnoreGuiInset = false
 	screenGui.DisplayOrder = 5
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 	ui.root = create("Frame", {
 		Name = "HudRoot",
@@ -1387,9 +1505,23 @@ local function getStationPartFromPrompt(prompt)
 	return nil
 end
 
+local function isOwnStation(stationPart)
+	local ownerUserId = stationPart:GetAttribute("OwnerUserId")
+	if ownerUserId ~= nil and ownerUserId ~= player.UserId then
+		pushNotification("This is not your restaurant.", "Warning")
+		return false
+	end
+
+	return true
+end
+
 local function handlePromptInteraction(prompt)
 	local stationPart = getStationPartFromPrompt(prompt)
 	if not stationPart then
+		return
+	end
+
+	if not isOwnStation(stationPart) then
 		return
 	end
 
@@ -1404,6 +1536,7 @@ local function handlePromptInteraction(prompt)
 
 		ServeRequest:FireServer({
 			customerId = customerId,
+			station = stationPart,
 		})
 		return
 	end
@@ -1427,6 +1560,7 @@ local function handlePromptInteraction(prompt)
 
 	AddRecipeStepRequest:FireServer({
 		stepName = nextStep,
+		station = stationPart,
 		stationType = stationType,
 	})
 end
@@ -1541,6 +1675,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 buildUi()
+connectViewportScale()
 task.spawn(connectLeaderstats)
 
 task.spawn(function()

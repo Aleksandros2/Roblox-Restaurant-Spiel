@@ -46,6 +46,12 @@
       "$path": "src/server"
     },
 
+    "ServerStorage": {
+      "Templates": {
+        "$className": "Folder"
+      }
+    },
+
     "StarterGui": {
       "FoodTruckGui": {
         "$className": "ScreenGui",
@@ -67,6 +73,209 @@
     "Workspace": {
       "$properties": {
         "FilteringEnabled": true
+      },
+      "Plots": {
+        "$className": "Folder",
+        "Plot1": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                -144,
+                0.28,
+                -58
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        },
+        "Plot2": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                -48,
+                0.28,
+                -58
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        },
+        "Plot3": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                48,
+                0.28,
+                -58
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        },
+        "Plot4": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                144,
+                0.28,
+                -58
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        },
+        "Plot5": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                -144,
+                0.28,
+                40
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        },
+        "Plot6": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                -48,
+                0.28,
+                40
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        },
+        "Plot7": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                48,
+                0.28,
+                40
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        },
+        "Plot8": {
+          "$className": "Model",
+          "GreenArea": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Color": [
+                0.36078,
+                0.59215,
+                0.32156
+              ],
+              "Material": "Grass",
+              "Position": [
+                144,
+                0.28,
+                40
+              ],
+              "Size": [
+                86,
+                0.28,
+                74
+              ]
+            }
+          }
+        }
       },
       "Baseplate": {
         "$className": "Part",

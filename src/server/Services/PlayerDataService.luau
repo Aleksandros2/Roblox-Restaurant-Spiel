@@ -117,16 +117,4 @@ function PlayerDataService:SetUpgradeLevel(player, upgradeId, level)
 	data.upgrades[upgradeId] = level
 end
 
-function PlayerDataService:GetHighestUpgradeLevel(upgradeId)
-	local highest = 0
-	for player in pairs(playerData) do
-		local level = self:GetUpgradeLevel(player, upgradeId)
-		if level > highest then
-			highest = level
-		end
-	end
-
-	return highest
-end
-
 return PlayerDataService
