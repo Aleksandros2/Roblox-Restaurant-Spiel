@@ -10,6 +10,7 @@ local GameConstants = {
 		"UpgradeRequest",
 		"NotificationEvent",
 		"ViralRushChanged",
+		"DayNightChanged",
 	},
 
 	TREND_DURATION_SECONDS = 300,

@@ -97,12 +97,36 @@ function PlotManager:_ensureTemplatesFolder()
 
 	makePart(template, "BuildArea", {
 		CanCollide = false,
-		Color = Color3.fromRGB(210, 234, 186),
-		Material = Enum.Material.SmoothPlastic,
+		Color = Color3.fromRGB(232, 207, 154),
+		Material = Enum.Material.Sand,
 		Size = Vector3.new(62, 0.08, 46),
 		CFrame = CFrame.new(0, 0.03, -6),
-		Transparency = 0.82,
+		Transparency = 0.18,
 	})
+
+	for index = 1, 7 do
+		local zOffset = -29 + (index * 5.75)
+		makePart(template, "BuildAreaDividerLong_" .. index, {
+			CanCollide = false,
+			Color = Color3.fromRGB(134, 113, 75),
+			Material = Enum.Material.SmoothPlastic,
+			Size = Vector3.new(0.26, 0.07, 2.8),
+			CFrame = CFrame.new(0, 0.13, zOffset),
+			Transparency = 0.12,
+		})
+	end
+
+	for index = 1, 9 do
+		local xOffset = -31 + (index * 6.2)
+		makePart(template, "BuildAreaDividerWide_" .. index, {
+			CanCollide = false,
+			Color = Color3.fromRGB(134, 113, 75),
+			Material = Enum.Material.SmoothPlastic,
+			Size = Vector3.new(3, 0.07, 0.26),
+			CFrame = CFrame.new(xOffset, 0.13, -6),
+			Transparency = 0.12,
+		})
+	end
 
 	makePart(template, "UpgradeArea", {
 		CanCollide = false,
@@ -188,7 +212,8 @@ function PlotManager:_ensureSpectatorArea()
 	pad.Color = Color3.fromRGB(82, 91, 110)
 	pad.Material = Enum.Material.Slate
 	pad.Size = Vector3.new(30, 0.4, 20)
-	pad.CFrame = CFrame.new(0, 0.2, 145)
+	local spectatorPosition = PlotConfig.SPECTATOR_CFRAME.Position
+	pad.CFrame = CFrame.new(spectatorPosition.X, 0.2, spectatorPosition.Z)
 
 	StationBillboardManager.EnsureStationSign(pad, {
 		backgroundColor = Color3.fromRGB(231, 236, 246),
@@ -418,6 +443,8 @@ function PlotManager:IsPlayerOwnerOfInstance(player, instance)
 		local plotId = current:GetAttribute("PlotId")
 		local ownerUserId = current:GetAttribute("OwnerUserId")
 		if plotId then
+			-- All station interactions run through this check so one player cannot
+			-- operate prompts, upgrades, orders, or queue parts on another plot.
 			return plotId == playerPlot.PlotId and ownerUserId == player.UserId
 		end
 		current = current.Parent

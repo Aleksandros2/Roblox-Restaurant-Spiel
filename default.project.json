@@ -35,6 +35,9 @@
         },
         "ViralRushChanged": {
           "$className": "RemoteEvent"
+        },
+        "DayNightChanged": {
+          "$className": "RemoteEvent"
         }
       },
       "Shared": {
@@ -67,7 +70,11 @@
     },
 
     "StarterPlayer": {
-      "StarterPlayerScripts": {}
+      "StarterPlayerScripts": {
+        "SprintController": {
+          "$path": "src/client/SprintController.client.luau"
+        }
+      }
     },
 
     "Workspace": {
@@ -89,9 +96,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                -144,
+                -184,
                 0.28,
-                -58
+                -170
               ],
               "Size": [
                 86,
@@ -114,9 +121,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                -48,
+                184,
                 0.28,
-                -58
+                -170
               ],
               "Size": [
                 86,
@@ -139,9 +146,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                48,
+                -206,
                 0.28,
-                -58
+                20
               ],
               "Size": [
                 86,
@@ -164,9 +171,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                144,
+                206,
                 0.28,
-                -58
+                20
               ],
               "Size": [
                 86,
@@ -189,9 +196,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                -144,
+                -162,
                 0.28,
-                40
+                170
               ],
               "Size": [
                 86,
@@ -214,9 +221,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                -48,
+                162,
                 0.28,
-                40
+                170
               ],
               "Size": [
                 86,
@@ -239,9 +246,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                48,
+                -58,
                 0.28,
-                40
+                210
               ],
               "Size": [
                 86,
@@ -264,9 +271,9 @@
               ],
               "Material": "Grass",
               "Position": [
-                144,
+                58,
                 0.28,
-                40
+                210
               ],
               "Size": [
                 86,

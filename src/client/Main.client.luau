@@ -19,6 +19,7 @@ local AddRecipeStepRequest = remotes:WaitForChild("AddRecipeStepRequest")
 local UpgradeRequest = remotes:WaitForChild("UpgradeRequest")
 local NotificationEvent = remotes:WaitForChild("NotificationEvent")
 local ViralRushChanged = remotes:WaitForChild("ViralRushChanged")
+local DayNightChanged = remotes:WaitForChild("DayNightChanged")
 
 local PANELS = {
 	Inventory = "Inventory",
@@ -65,6 +66,7 @@ local NAVIGATION = {
 	{
 		panel = PANELS.Inventory,
 		hotkey = "1",
+		icon = "🍽️",
 		short = "INV",
 		title = "Dish",
 		color = HUD_COLORS.blue,
@@ -72,6 +74,7 @@ local NAVIGATION = {
 	{
 		panel = PANELS.Recipes,
 		hotkey = "2",
+		icon = "📖",
 		short = "REC",
 		title = "Recipes",
 		color = HUD_COLORS.orange,
@@ -79,6 +82,7 @@ local NAVIGATION = {
 	{
 		panel = PANELS.Orders,
 		hotkey = "3",
+		icon = "📦",
 		short = "ORD",
 		title = "Orders",
 		color = HUD_COLORS.green,
@@ -86,6 +90,7 @@ local NAVIGATION = {
 	{
 		panel = PANELS.Upgrades,
 		hotkey = "4",
+		icon = "🚚",
 		short = "UPG",
 		title = "Truck",
 		color = Color3.fromRGB(159, 141, 255),
@@ -93,6 +98,7 @@ local NAVIGATION = {
 	{
 		panel = PANELS.Shop,
 		hotkey = "5",
+		icon = "🛒",
 		short = "SHOP",
 		title = "Shop",
 		color = Color3.fromRGB(255, 194, 108),
@@ -131,6 +137,12 @@ local questState = {
 	text = "Cook 5 dishes",
 	current = 0,
 	target = 5,
+}
+
+local dayNightState = {
+	day = 1,
+	minuteOfDay = (6 * 60) + 35,
+	displayText = "Day 1 - 06:35",
 }
 
 local uiState = {
@@ -210,18 +222,14 @@ local function formatDuration(seconds)
 end
 
 local function formatGameTime()
-	local totalMinutes = (8 * 60) + math.floor(workspace:GetServerTimeNow() / 2)
-	local day = math.floor(totalMinutes / (24 * 60)) + 1
-	local minuteOfDay = totalMinutes % (24 * 60)
-	local hour24 = math.floor(minuteOfDay / 60)
-	local minute = minuteOfDay % 60
-	local period = if hour24 >= 12 then "pm" else "am"
-	local hour12 = hour24 % 12
-	if hour12 == 0 then
-		hour12 = 12
+	if dayNightState.displayText then
+		return dayNightState.displayText
 	end
 
-	return string.format("Day %d - %d:%02d%s", day, hour12, minute, period)
+	local minuteOfDay = math.floor(dayNightState.minuteOfDay or 0) % (24 * 60)
+	local hour = math.floor(minuteOfDay / 60)
+	local minute = minuteOfDay % 60
+	return string.format("Day %d - %02d:%02d", dayNightState.day or 1, hour, minute)
 end
 
 local function makeLabel(parent, name, text, size, color, font)
@@ -479,8 +487,8 @@ local function refreshCurrencies()
 	local money = leaderstats and leaderstats:FindFirstChild("Money")
 	local viralPoints = leaderstats and leaderstats:FindFirstChild("ViralPoints")
 
-	setText(ui.moneyValue, tostring(if money then money.Value else 0))
-	setText(ui.vpValue, tostring(if viralPoints then viralPoints.Value else 10))
+	setText(ui.moneyValue, string.format("💰 %d", if money then money.Value else 0))
+	setText(ui.vpValue, string.format("💎 %d", if viralPoints then viralPoints.Value else 10))
 end
 
 local function refreshTrendBadge()
@@ -708,11 +716,11 @@ local function refreshSettingsPanel()
 		return
 	end
 
-	setText(ui.musicToggleLabel, "Music: " .. (uiState.musicEnabled and "On" or "Off"))
+	setText(ui.musicToggleLabel, "🎵 Music: " .. (uiState.musicEnabled and "On" or "Off"))
 	setText(ui.scaleToggleLabel, "UI Scale: " .. (uiState.compactScale and "Compact" or "Normal"))
 
 	if ui.shortcutButtons.Music then
-		setText(ui.shortcutButtons.Music, uiState.musicEnabled and "Music On" or "Music Off")
+		setText(ui.shortcutButtons.Music, uiState.musicEnabled and "🎵 Music On" or "🎵 Music Off")
 	end
 end
 
@@ -951,15 +959,19 @@ local function buildStarterPackButton()
 	local button = makeButton(ui.root, "StarterPackButton", HUD_COLORS.orange)
 	button.AnchorPoint = Vector2.new(0, 0.5)
 	button.Position = UDim2.new(0, 12, 0.5, -10)
-	button.Size = UDim2.fromOffset(72, 54)
+	button.Size = UDim2.fromOffset(76, 58)
 	button.ZIndex = 2
 
-	local title = makeLabel(button, "Title", "Starter", 12, HUD_COLORS.white, Enum.Font.GothamBold)
-	title.Position = UDim2.fromOffset(8, 7)
-	title.Size = UDim2.new(1, -16, 0, 14)
+	local icon = makeLabel(button, "Icon", "🎁", 18, HUD_COLORS.white, Enum.Font.GothamBold)
+	icon.Position = UDim2.fromOffset(8, 4)
+	icon.Size = UDim2.new(1, -16, 0, 20)
+	icon.TextXAlignment = Enum.TextXAlignment.Center
+	local title = makeLabel(button, "Title", "Starter", 11, HUD_COLORS.white, Enum.Font.GothamBold)
+	title.Position = UDim2.fromOffset(8, 25)
+	title.Size = UDim2.new(1, -16, 0, 13)
 	title.TextXAlignment = Enum.TextXAlignment.Center
 	local subtitle = makeLabel(button, "Subtitle", "Pack", 11, HUD_COLORS.white, Enum.Font.Gotham)
-	subtitle.Position = UDim2.fromOffset(8, 24)
+	subtitle.Position = UDim2.fromOffset(8, 39)
 	subtitle.Size = UDim2.new(1, -16, 0, 12)
 	subtitle.TextXAlignment = Enum.TextXAlignment.Center
 
@@ -973,50 +985,37 @@ local function buildCurrencyFrame()
 	local frame = create("Frame", {
 		Name = "CurrencyFrame",
 		AnchorPoint = Vector2.new(0, 0),
-		BackgroundColor3 = HUD_COLORS.panel,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0, 12, 0, 14),
-		Size = UDim2.new(0.18, 0, 0, 58),
+		Size = UDim2.fromOffset(110, 48),
 		ZIndex = 2,
 		Parent = ui.root,
 	})
-	addCorner(frame, 18)
-	addStroke(frame, HUD_COLORS.panelLine, 1, 0.12)
-	addPadding(frame, 12, 10)
 	create("UISizeConstraint", {
-		MaxSize = Vector2.new(184, 62),
-		MinSize = Vector2.new(150, 54),
+		MaxSize = Vector2.new(132, 54),
+		MinSize = Vector2.new(96, 42),
 		Parent = frame,
 	})
 
-	local vpRow = create("Frame", {
-		Name = "VpRow",
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 18),
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Vertical,
+		Padding = UDim.new(0, 4),
+		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = frame,
 	})
-	ui.vpValue = makeLabel(vpRow, "VpValue", "0", 13, HUD_COLORS.text, Enum.Font.GothamBold)
-	ui.vpValue.AnchorPoint = Vector2.new(1, 0)
-	ui.vpValue.Position = UDim2.new(1, 0, 0, 0)
-	ui.vpValue.Size = UDim2.fromOffset(64, 18)
-	ui.vpValue.TextXAlignment = Enum.TextXAlignment.Right
-	local vpLabel = makeLabel(vpRow, "VpLabel", "Diamonds", 13, HUD_COLORS.vp, Enum.Font.GothamBold)
-	vpLabel.Size = UDim2.new(1, -70, 1, 0)
 
-	local moneyRow = create("Frame", {
-		Name = "MoneyRow",
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 24),
-		Size = UDim2.new(1, 0, 0, 18),
-		Parent = frame,
-	})
-	ui.moneyValue = makeLabel(moneyRow, "MoneyValue", "0", 13, HUD_COLORS.text, Enum.Font.GothamBold)
-	ui.moneyValue.AnchorPoint = Vector2.new(1, 0)
-	ui.moneyValue.Position = UDim2.new(1, 0, 0, 0)
-	ui.moneyValue.Size = UDim2.fromOffset(64, 18)
-	ui.moneyValue.TextXAlignment = Enum.TextXAlignment.Right
-	local moneyLabel = makeLabel(moneyRow, "MoneyLabel", "Money", 13, HUD_COLORS.greenDark, Enum.Font.GothamBold)
-	moneyLabel.Size = UDim2.new(1, -70, 1, 0)
+	ui.vpValue = makeLabel(frame, "VpValue", "💎 10", 17, HUD_COLORS.white, Enum.Font.GothamBold)
+	ui.vpValue.Size = UDim2.new(1, 0, 0, 20)
+	ui.vpValue.TextStrokeColor3 = HUD_COLORS.shadow
+	ui.vpValue.TextStrokeTransparency = 0.35
+	ui.vpValue.TextXAlignment = Enum.TextXAlignment.Left
+
+	ui.moneyValue = makeLabel(frame, "MoneyValue", "💰 0", 17, HUD_COLORS.white, Enum.Font.GothamBold)
+	ui.moneyValue.Size = UDim2.new(1, 0, 0, 20)
+	ui.moneyValue.TextStrokeColor3 = HUD_COLORS.shadow
+	ui.moneyValue.TextStrokeTransparency = 0.35
+	ui.moneyValue.TextXAlignment = Enum.TextXAlignment.Left
 end
 
 local function buildBottomNav()
@@ -1052,9 +1051,16 @@ local function buildBottomNav()
 			Parent = button,
 		})
 
+		local icon = makeLabel(button, "Icon", definition.icon or "", 15, HUD_COLORS.white, Enum.Font.GothamBold)
+		icon.Position = UDim2.fromOffset(7, 7)
+		icon.Size = UDim2.fromOffset(18, 18)
+		icon.TextXAlignment = Enum.TextXAlignment.Center
+		icon.TextYAlignment = Enum.TextYAlignment.Center
+		icon.ZIndex = 3
+
 		local short = makeLabel(button, "Short", definition.short, 14, HUD_COLORS.white, Enum.Font.GothamBold)
-		short.Position = UDim2.fromOffset(7, 10)
-		short.Size = UDim2.new(1, -14, 0, 18)
+		short.Position = UDim2.fromOffset(27, 9)
+		short.Size = UDim2.new(1, -34, 0, 17)
 		short.TextScaled = true
 		short.TextXAlignment = Enum.TextXAlignment.Center
 		short.TextYAlignment = Enum.TextYAlignment.Center
@@ -1062,8 +1068,8 @@ local function buildBottomNav()
 		addTextSizeConstraint(short, 10, 16)
 
 		local title = makeLabel(button, "Title", definition.title, 11, HUD_COLORS.white, Enum.Font.Gotham)
-		title.Position = UDim2.fromOffset(5, 31)
-		title.Size = UDim2.new(1, -10, 0, 14)
+		title.Position = UDim2.fromOffset(6, 31)
+		title.Size = UDim2.new(1, -12, 0, 14)
 		title.TextScaled = true
 		title.TextXAlignment = Enum.TextXAlignment.Center
 		title.TextYAlignment = Enum.TextYAlignment.Center
@@ -1142,15 +1148,15 @@ local function buildRightShortcuts()
 		ui.shortcutButtons[name] = label
 	end
 
-	addShortcut("Music", "Music On", function()
+	addShortcut("Music", "🎵 Music On", function()
 		uiState.musicEnabled = not uiState.musicEnabled
 		refreshSettingsPanel()
 		pushNotification("Music toggled locally.", "Info")
 	end)
-	addShortcut("Quest", "Goal", function()
+	addShortcut("Quest", "🎯 Goal", function()
 		pushNotification(string.format("%s (%d/%d)", questState.text, questState.current, questState.target), "Info")
 	end)
-	addShortcut("Settings", "Settings", function()
+	addShortcut("Settings", "⚙️ Settings", function()
 		togglePanel(PANELS.Settings)
 	end)
 end
@@ -1200,15 +1206,21 @@ local function buildRecipesPanel()
 	local subtitle = makeLabel(body, "Subtitle", "Pick a recipe to start cooking.", 13, HUD_COLORS.subtext, Enum.Font.Gotham)
 	subtitle.Size = UDim2.new(1, 0, 0, 18)
 
-	local list = create("Frame", {
+	local list = create("ScrollingFrame", {
 		Name = "RecipeList",
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.fromScale(0, 0),
 		Position = UDim2.fromOffset(0, 28),
+		ScrollBarImageColor3 = HUD_COLORS.orange,
+		ScrollBarThickness = 4,
 		Size = UDim2.new(1, 0, 1, -28),
 		Parent = body,
 	})
 	create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
+		Name = "Layout",
 		Padding = UDim.new(0, 10),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = list,
@@ -1292,14 +1304,20 @@ end
 local function buildUpgradesPanel()
 	local _, body = makePanel(PANELS.Upgrades, "Upgrades", false, 360)
 
-	local list = create("Frame", {
+	local list = create("ScrollingFrame", {
 		Name = "UpgradeList",
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.fromScale(0, 0),
+		ScrollBarImageColor3 = HUD_COLORS.orange,
+		ScrollBarThickness = 4,
 		Size = UDim2.fromScale(1, 1),
 		Parent = body,
 	})
 	create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
+		Name = "Layout",
 		Padding = UDim.new(0, 10),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = list,
@@ -1648,6 +1666,17 @@ ViralRushChanged.OnClientEvent:Connect(function(payload)
 
 	viralRushState = payload
 	refreshViralRushBadge()
+end)
+
+DayNightChanged.OnClientEvent:Connect(function(payload)
+	if typeof(payload) ~= "table" then
+		return
+	end
+
+	dayNightState.day = if typeof(payload.day) == "number" then payload.day else dayNightState.day
+	dayNightState.minuteOfDay = if typeof(payload.minuteOfDay) == "number" then payload.minuteOfDay else dayNightState.minuteOfDay
+	dayNightState.displayText = if typeof(payload.displayText) == "string" then payload.displayText else nil
+	refreshDayTime()
 end)
 
 ProximityPromptService.PromptTriggered:Connect(function(prompt)
